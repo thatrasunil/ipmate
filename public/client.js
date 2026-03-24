@@ -48,25 +48,12 @@ roomIdInput.addEventListener('input', () => {
   console.log('Room ID input:', roomIdInput.value);
 });
 
-// Ensure inputs are focusable
+// Ensure inputs are focusable (standard behavior is best for mobile keyboard)
 document.querySelectorAll('.input-group').forEach(group => {
-  group.addEventListener('click', (e) => {
+  group.addEventListener('click', () => {
     const input = group.querySelector('input');
-    if (input && e.target !== input) {
-      input.focus();
-    }
+    if (input) input.focus();
   });
-});
-
-// Ensure inputs work on mobile
-usernameInput.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  usernameInput.focus();
-});
-
-roomIdInput.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  roomIdInput.focus();
 });
 const joinButton = document.getElementById('join-btn');
 const joinError = document.getElementById('join-error');
@@ -682,8 +669,9 @@ function renderChess() {
   container.style.borderRadius = '8px';
   container.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
 
-  gameState.board.forEach((row, y) => {
-    row.forEach((cell, x) => {
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const cell = gameState.board[y * 8 + x];
       const square = document.createElement('div');
       square.className = 'chess-square';
       square.style.width = 'clamp(40px, 9vmin, 85px)';
@@ -728,8 +716,8 @@ function renderChess() {
       };
 
       container.appendChild(square);
-    });
-  });
+    }
+  }
 
   board.appendChild(container);
 }
@@ -829,52 +817,53 @@ function renderBattleship() {
     grid.style.display = 'grid';
     grid.style.gridTemplateColumns = 'repeat(10, clamp(20px, 3.5vmin, 35px))';
     grid.style.gap = '1px';
-    grid.style.background = 'rgba(255,255,255,0.1)';
     grid.style.padding = '4px';
     grid.style.borderRadius = '4px';
+    grid.style.background = 'rgba(255,255,255,0.1)';
 
-    const playerState = gameState.players[mySymbol];
+    const playerData = gameState.players[mySymbol];
     const opponentSymbol = mySymbol === 'P1' ? 'P2' : 'P1';
-    const opponentState = gameState.players[opponentSymbol];
+    const opponentData = gameState.players[opponentSymbol];
 
     for (let r = 0; r < 10; r++) {
       for (let c = 0; c < 10; c++) {
+        const idx = r * 10 + c;
         const cell = document.createElement('div');
         cell.style.width = 'clamp(25px, 4.5vmin, 45px)';
         cell.style.height = 'clamp(25px, 4.5vmin, 45px)';
         cell.style.background = '#1e293b';
-        cell.style.cursor = isOpponent ? 'pointer' : 'default';
+        cell.style.cursor = (isOpponent && gameState.phase === 'battle') ? 'pointer' : 'default';
 
         if (isOpponent) {
-          if (opponentState && opponentState.hits[r][c]) {
-            cell.style.background = opponentState.hits[r][c] === 'hit' ? '#f43f5e' : '#64748b';
-            cell.innerHTML = opponentState.hits[r][c] === 'hit' ? '?' : '??';
+          if (opponentData && opponentData.hits[idx]) {
+            cell.style.background = opponentData.hits[idx] === 'hit' ? '#f43f5e' : '#64748b';
+            cell.innerHTML = opponentData.hits[idx] === 'hit' ? '💥' : '💧';
           }
           cell.onclick = () => {
             if (gameState.phase === 'battle' && gameState.turn === mySymbol) {
               haptic();
-            sendMove({ x: c, y: r });
+              sendMove({ x: c, y: r });
             }
           };
         } else {
           // My board
-          if (playerState) {
-            if (playerState.board[r][c]) cell.style.background = '#6366f1';
-            if (playerState.hits[r][c]) {
-              cell.innerHTML = playerState.hits[r][c] === 'hit' ? '?' : '??';
-              if (playerState.hits[r][c] === 'hit') cell.style.boxShadow = 'inset 0 0 10px rgba(0,0,0,0.5)';
+          if (playerData) {
+            if (playerData.board[idx]) cell.style.background = '#6366f1';
+            if (playerData.hits[idx]) {
+              cell.innerHTML = playerData.hits[idx] === 'hit' ? '💥' : '💧';
+              if (playerData.hits[idx] === 'hit') cell.style.boxShadow = 'inset 0 0 10px rgba(0,0,0,0.5)';
             }
           } else if (gameState.phase === 'placement') {
             // Placement mode
             cell.style.cursor = 'pointer';
-            if (window.tempPlacement && window.tempPlacement[r][c]) cell.style.background = '#6366f1';
+            if (window.tempPlacement && window.tempPlacement[idx]) cell.style.background = '#6366f1';
             cell.onclick = () => {
-              if (!window.tempPlacement) window.tempPlacement = Array(10).fill().map(() => Array(10).fill(0));
-              window.tempPlacement[r][c] = window.tempPlacement[r][c] ? 0 : 1;
-              const count = window.tempPlacement.flat().filter(x => x).length;
+              if (!window.tempPlacement) window.tempPlacement = Array(100).fill(0);
+              window.tempPlacement[idx] = window.tempPlacement[idx] ? 0 : 1;
+              const count = window.tempPlacement.filter(x => x).length;
               if (count === 5) {
                 haptic();
-          sendMove({ board: window.tempPlacement, ships: [] });
+                sendMove({ board: window.tempPlacement, ships: [] });
                 window.tempPlacement = null;
               }
               renderGame();
@@ -903,8 +892,9 @@ function renderCheckers() {
   container.style.background = '#333';
   container.style.borderRadius = '8px';
 
-  gameState.board.forEach((row, y) => {
-    row.forEach((cell, x) => {
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const cell = gameState.board[y * 8 + x];
       const square = document.createElement('div');
       square.style.width = 'clamp(40px, 9vmin, 85px)';
       square.style.height = 'clamp(40px, 9vmin, 85px)';
@@ -957,8 +947,8 @@ function renderCheckers() {
       };
 
       container.appendChild(square);
-    });
-  });
+    }
+  }
 
   board.appendChild(container);
 }
@@ -973,8 +963,9 @@ function renderOthello() {
   container.style.borderRadius = '8px';
   container.style.boxShadow = 'inset 0 4px 12px rgba(0,0,0,0.3)';
 
-  gameState.board.forEach((row, r) => {
-    row.forEach((cell, c) => {
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const cell = gameState.board[r * 8 + c];
       const square = document.createElement('div');
       square.style.width = 'clamp(35px, 8vmin, 60px)';
       square.style.height = 'clamp(35px, 8vmin, 60px)';
@@ -1000,10 +991,9 @@ function renderOthello() {
         haptic();
         sendMove({ r, c });
       };
-
       container.appendChild(square);
-    });
-  });
+    }
+  }
 
   board.appendChild(container);
 }
@@ -1210,8 +1200,9 @@ function renderConnectFour() {
   const grid = document.createElement('div');
   grid.className = 'c4-grid';
 
-  gameState.board.forEach((row, ri) => {
-    row.forEach((cell, ci) => {
+  for (let ri = 0; ri < 6; ri++) {
+    for (let ci = 0; ci < 7; ci++) {
+      const cell = gameState.board[ri * 7 + ci];
       const div = document.createElement('div');
       div.className = `c4-cell ${cell || ''}`;
       div.style.background = 'radial-gradient(circle, var(--bg-surface) 0%, var(--bg-dark) 100%)';
@@ -1225,7 +1216,7 @@ function renderConnectFour() {
       }
 
       div.onclick = () => {
-        if (!cell && gameState.turn === mySymbol) {
+        if (gameState.active && gameState.turn === mySymbol) {
           haptic();
           sendMove({ col: ci });
         }

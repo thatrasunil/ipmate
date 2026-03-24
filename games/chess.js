@@ -1,13 +1,13 @@
 function createInitialState() {
-  const board = Array(8).fill().map(() => Array(8).fill(null));
+  const board = Array(64).fill(null);
   // R=Rook, N=Knight, B=Bishop, Q=Queen, K=King, P=Pawn
   const setupRow = (row, color) => {
     const pieces = ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'];
-    pieces.forEach((p, i) => board[row][i] = color + p);
+    pieces.forEach((p, i) => board[row * 8 + i] = color + p);
   };
   setupRow(0, 'B'); // Black
-  for (let i = 0; i < 8; i++) board[1][i] = 'BP';
-  for (let i = 0; i < 8; i++) board[6][i] = 'WP';
+  for (let i = 0; i < 8; i++) board[1 * 8 + i] = 'BP';
+  for (let i = 0; i < 8; i++) board[6 * 8 + i] = 'WP';
   setupRow(7, 'W'); // White
 
   return { board, turn: 'W', winner: null, active: true };
@@ -17,10 +17,10 @@ function isValidMove(state, player, move) {
   const { from, to } = move;
   if (!state.active || player.symbol !== state.turn) return false;
   
-  const piece = state.board[from.y][from.x];
+  const piece = state.board[from.y * 8 + from.x];
   if (!piece || piece[0] !== state.turn) return false;
 
-  const target = state.board[to.y][to.x];
+  const target = state.board[to.y * 8 + to.x];
   if (target && target[0] === state.turn) return false;
 
   const dx = to.x - from.x;
@@ -36,7 +36,7 @@ function isValidMove(state, player, move) {
       if (dx === 0 && !target) {
         if (dy === dir) return true;
         if (dy === dir * 2 && ((piece[0] === 'W' && from.y === 6) || (piece[0] === 'B' && from.y === 1))) {
-          return !state.board[from.y + dir][from.x];
+          return !state.board[(from.y + dir) * 8 + from.x];
         }
       }
       // Capture
@@ -70,7 +70,7 @@ function isPathClear(board, from, to) {
   let x = from.x + dx;
   let y = from.y + dy;
   while (x !== to.x || y !== to.y) {
-    if (board[y][x]) return false;
+    if (board[y * 8 + x]) return false;
     x += dx;
     y += dy;
   }
@@ -79,16 +79,16 @@ function isPathClear(board, from, to) {
 
 function applyMove(state, player, move) {
   const { from, to } = move;
-  const piece = state.board[from.y][from.x];
-  const target = state.board[to.y][to.x];
+  const piece = state.board[from.y * 8 + from.x];
+  const target = state.board[to.y * 8 + to.x];
 
   if (target && target[1] === 'K') {
     state.winner = state.turn === 'W' ? 'White' : 'Black';
     state.active = false;
   }
 
-  state.board[to.y][to.x] = piece;
-  state.board[from.y][from.x] = null;
+  state.board[to.y * 8 + to.x] = piece;
+  state.board[from.y * 8 + from.x] = null;
   state.turn = state.turn === 'W' ? 'B' : 'W';
   return state;
 }

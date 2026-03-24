@@ -19,9 +19,9 @@ function isValidMove(state, player, move) {
 function applyMove(state, player, move) {
   if (state.phase === 'placement') {
     state.players[player.symbol] = {
-      board: move.board, // 10x10 binary grid
-      hits: Array(10).fill().map(() => Array(10).fill(null)),
-      ships: move.ships, // Ship definitions if needed
+      board: move.board, // 100-element binary array
+      hits: Array(100).fill(null),
+      ships: move.ships || [],
     };
     if (Object.keys(state.players).length === 2) {
       state.phase = 'battle';
@@ -30,28 +30,26 @@ function applyMove(state, player, move) {
     const opponentSymbol = player.symbol === 'P1' ? 'P2' : 'P1';
     const opponent = state.players[opponentSymbol];
     const { x, y } = move;
+    const idx = y * 10 + x;
 
-    if (opponent.hits[y][x] !== null) return state; // Already shot here
+    if (opponent.hits[idx] !== null) return state; // Already shot here
 
-    if (opponent.board[y][x]) {
-      opponent.hits[y][x] = 'hit';
+    if (opponent.board[idx]) {
+      opponent.hits[idx] = 'hit';
       // Check win
       let allSunk = true;
-      for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 10; c++) {
-          if (opponent.board[r][c] && opponent.hits[r][c] !== 'hit') {
-            allSunk = false;
-            break;
-          }
+      for (let i = 0; i < 100; i++) {
+        if (opponent.board[i] && opponent.hits[i] !== 'hit') {
+          allSunk = false;
+          break;
         }
-        if (!allSunk) break;
       }
       if (allSunk) {
         state.winner = player.symbol;
         state.active = false;
       }
     } else {
-      opponent.hits[y][x] = 'miss';
+      opponent.hits[idx] = 'miss';
       state.turn = opponentSymbol;
     }
   }

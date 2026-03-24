@@ -1,7 +1,7 @@
 function createInitialState() {
-  const board = Array(8).fill().map(() => Array(8).fill(null));
-  board[3][3] = 'white'; board[4][4] = 'white';
-  board[3][4] = 'black'; board[4][3] = 'black';
+  const board = Array(64).fill(null);
+  board[3 * 8 + 3] = 'white'; board[4 * 8 + 4] = 'white';
+  board[3 * 8 + 4] = 'black'; board[4 * 8 + 3] = 'black';
   return { board, turn: 'black', active: true, winner: null };
 }
 
@@ -12,7 +12,7 @@ const directions = [
 ];
 
 function getFlips(board, r, c, turn) {
-  if (board[r][c] !== null) return [];
+  if (board[r * 8 + c] !== null) return [];
   const opponent = turn === 'black' ? 'white' : 'black';
   let allFlips = [];
 
@@ -21,13 +21,13 @@ function getFlips(board, r, c, turn) {
     let nr = r + dr;
     let nc = c + dc;
 
-    while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] === opponent) {
+    while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr * 8 + nc] === opponent) {
       currentFlips.push([nr, nc]);
       nr += dr;
       nc += dc;
     }
 
-    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] === turn) {
+    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr * 8 + nc] === turn) {
       allFlips = allFlips.concat(currentFlips);
     }
   }
@@ -45,9 +45,9 @@ function applyMove(state, player, move) {
   const { r, c } = move;
   const flips = getFlips(state.board, r, c, state.turn);
 
-  state.board[r][c] = state.turn;
+  state.board[r * 8 + c] = state.turn;
   for (const [fr, fc] of flips) {
-    state.board[fr][fc] = state.turn;
+    state.board[fr * 8 + fc] = state.turn;
   }
 
   const nextTurn = state.turn === 'black' ? 'white' : 'black';
@@ -83,10 +83,10 @@ function applyMove(state, player, move) {
       // Game over
       state.active = false;
       let black = 0, white = 0;
-      state.board.forEach(row => row.forEach(cell => {
+      state.board.forEach(cell => {
         if (cell === 'black') black++;
         if (cell === 'white') white++;
-      }));
+      });
       if (black > white) state.winner = 'Black';
       else if (white > black) state.winner = 'White';
       else state.winner = 'Draw';

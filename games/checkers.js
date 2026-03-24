@@ -1,10 +1,10 @@
 function createInitialState() {
-  const board = Array(8).fill().map(() => Array(8).fill(null));
+  const board = Array(64).fill(null);
   // r=red, b=black
   for (let r = 0; r < 3; r++)
-    for (let c = (r % 2 === 1 ? 0 : 1); c < 8; c += 2) board[r][c] = 'b';
+    for (let c = (r % 2 === 1 ? 0 : 1); c < 8; c += 2) board[r * 8 + c] = 'b';
   for (let r = 5; r < 8; r++)
-    for (let c = (r % 2 === 1 ? 0 : 1); c < 8; c += 2) board[r][c] = 'r';
+    for (let c = (r % 2 === 1 ? 0 : 1); c < 8; c += 2) board[r * 8 + c] = 'r';
 
   return { board, turn: 'r', active: true, winner: null };
 }
@@ -13,9 +13,9 @@ function isValidMove(state, player, move) {
   const { from, to } = move;
   if (!state.active || state.turn !== player.symbol) return false;
   
-  const piece = state.board[from.y][from.x];
+  const piece = state.board[from.y * 8 + from.x];
   if (!piece || piece.toLowerCase() !== state.turn) return false;
-  if (state.board[to.y][to.x] !== null) return false;
+  if (state.board[to.y * 8 + to.x] !== null) return false;
 
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -38,7 +38,7 @@ function isValidMove(state, player, move) {
     if (!isKing && dy !== direction * 2) return false;
     const midX = from.x + dx / 2;
     const midY = from.y + dy / 2;
-    const midPiece = state.board[midY][midX];
+    const midPiece = state.board[midY * 8 + midX];
     return midPiece && midPiece.toLowerCase() !== state.turn;
   }
 
@@ -47,31 +47,30 @@ function isValidMove(state, player, move) {
 
 function applyMove(state, player, move) {
   const { from, to } = move;
-  const piece = state.board[from.y][from.x];
+  const piece = state.board[from.y * 8 + from.x];
   const dx = to.x - from.x;
-  const dy = to.y - from.y;
 
-  state.board[to.y][to.x] = piece;
-  state.board[from.y][from.x] = null;
+  state.board[to.y * 8 + to.x] = piece;
+  state.board[from.y * 8 + from.x] = null;
 
   // Capture
   if (Math.abs(dx) === 2) {
     const midX = from.x + dx / 2;
     const midY = from.y + dy / 2;
-    state.board[midY][midX] = null;
+    state.board[midY * 8 + midX] = null;
   }
 
   // Promotion
   if ((piece === 'r' && to.y === 0) || (piece === 'b' && to.y === 7)) {
-    state.board[to.y][to.x] = piece.toUpperCase();
+    state.board[to.y * 8 + to.x] = piece.toUpperCase();
   }
 
   // Check for winner
   const opponent = state.turn === 'r' ? 'b' : 'r';
   let opponentPieces = 0;
-  state.board.forEach(row => row.forEach(cell => {
+  state.board.forEach(cell => {
     if (cell && cell.toLowerCase() === opponent) opponentPieces++;
-  }));
+  });
 
   if (opponentPieces === 0) {
     state.winner = state.turn === 'r' ? 'Red' : 'Black';
