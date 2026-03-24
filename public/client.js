@@ -1237,8 +1237,8 @@ function renderConnectFour() {
       };
 
       grid.appendChild(div);
-    });
-  });
+    }
+  }
 
   container.appendChild(grid);
   board.appendChild(container);

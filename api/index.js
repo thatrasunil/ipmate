@@ -176,6 +176,7 @@ app.post('/api/join', asyncHandler(async (req, res) => {
 app.post('/api/move', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { roomId, participantId, move } = req.body;
+  console.log(`[MOVE] room:${roomId} part:${participantId} move:`, move);
   if (!roomId || !participantId) return res.status(400).json({ error: 'Missing required fields.' });
 
   const roomRef = db.collection('rooms').doc(roomId);
@@ -210,6 +211,7 @@ app.post('/api/move', asyncHandler(async (req, res) => {
 app.post('/api/select-game', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { roomId, gameType } = req.body;
+  console.log(`[SELECT-GAME] room:${roomId} type:${gameType}`);
   if (!roomId || !gameType || !games[gameType]) return res.status(400).json({ error: 'Invalid game type or room.' });
 
   const roomRef = db.collection('rooms').doc(roomId);
@@ -247,8 +249,8 @@ app.post('/api/select-game', asyncHandler(async (req, res) => {
     await batch.commit();
     res.json({ success: true });
   } catch (err) {
-    console.error('Error in /api/select-game:', err);
-    res.status(500).json({ error: 'Internal server error.' });
+    console.error('FATAL Error in /api/select-game:', err);
+    res.status(500).json({ error: 'Internal server error.', details: err.message });
   }
 }));
 
