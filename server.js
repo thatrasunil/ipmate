@@ -9,9 +9,19 @@ const admin = require('firebase-admin');
 
 // Initialize Firebase Admin
 const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || path.join(__dirname, 'serviceAccount.json');
-if (fs.existsSync(path.resolve(serviceAccountPath))) {
+
+if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
+  // Option 1: Initialize using individual environment variables
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    })
+  });
+} else if (fs.existsSync(path.resolve(serviceAccountPath))) {
+  // Option 2: Initialize using the serviceAccount.json file
   const serviceAccount = require(path.resolve(serviceAccountPath));
-  // Ensure private key newlines are handled correctly
   if (serviceAccount.private_key) {
     serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
   }
@@ -19,7 +29,7 @@ if (fs.existsSync(path.resolve(serviceAccountPath))) {
     credential: admin.credential.cert(serviceAccount)
   });
 } else {
-  console.warn(`WARNING: Firebase Service Account file not found at ${serviceAccountPath}. Auto-deletion will be disabled.`);
+  console.warn(`WARNING: No Firebase credentials found. Firestore features will be disabled.`);
 }
 
 const db = admin.apps.length ? admin.firestore() : null;
@@ -29,7 +39,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 if (!db) {
-  console.error('FATAL: Firebase Firestore is not initialized. Please check your environment variables.');
+  console.error('FATAL: Firebase Firestore is not initialized. Please ensure FIREBASE_PRIVATE_KEY and FIREBASE_CLIENT_EMAIL are set correctly.');
 }
 
 const games = {};
