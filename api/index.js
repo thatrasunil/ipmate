@@ -171,7 +171,7 @@ app.post('/api/join', asyncHandler(async (req, res) => {
     console.error('Error in /api/join:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
-});
+}));
 
 app.post('/api/move', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
@@ -205,7 +205,7 @@ app.post('/api/move', asyncHandler(async (req, res) => {
     console.error('Error in /api/move:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
-});
+}));
 
 app.post('/api/select-game', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
@@ -250,7 +250,7 @@ app.post('/api/select-game', asyncHandler(async (req, res) => {
     console.error('Error in /api/select-game:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
-});
+}));
 
 app.post('/api/reset-game', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
@@ -272,7 +272,7 @@ app.post('/api/reset-game', asyncHandler(async (req, res) => {
     console.error('Error in /api/reset-game:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
-});
+}));
 
 app.post('/api/typing', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
@@ -287,7 +287,7 @@ app.post('/api/typing', asyncHandler(async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to update typing state.' });
   }
-});
+}));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public', 'index.html'));
