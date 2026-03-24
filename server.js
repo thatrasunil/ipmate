@@ -10,26 +10,26 @@ const admin = require('firebase-admin');
 // Initialize Firebase Admin
 const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || path.join(__dirname, 'serviceAccount.json');
 
-if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
-  // Option 1: Initialize using individual environment variables
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    })
-  });
-} else if (fs.existsSync(path.resolve(serviceAccountPath))) {
-  // Option 2: Initialize using the serviceAccount.json file
-  const serviceAccount = require(path.resolve(serviceAccountPath));
-  if (serviceAccount.private_key) {
-    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+if (!admin.apps.length) {
+  if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      })
+    });
+  } else if (fs.existsSync(path.resolve(serviceAccountPath))) {
+    const serviceAccount = require(path.resolve(serviceAccountPath));
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+  } else {
+    console.warn(`WARNING: No Firebase credentials found. Firestore features will be disabled.`);
   }
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
-} else {
-  console.warn(`WARNING: No Firebase credentials found. Firestore features will be disabled.`);
 }
 
 const db = admin.apps.length ? admin.firestore() : null;
