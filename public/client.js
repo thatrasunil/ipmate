@@ -10,14 +10,31 @@ async function initFirebase() {
     const response = await fetch('/api/config');
     const config = await response.json();
     
-    // Check if we have valid config
     if (config.apiKey && typeof firebase !== 'undefined') {
       firebase.initializeApp(config);
       db = firebase.firestore();
-      console.log('Firebase initialized with dynamic config');
+      console.log('Firebase initialized');
+      
+      // After Firebase is ready, check for a persisted session
+      checkPersistedSession();
     }
   } catch (e) {
     console.error('Failed to load Firebase config:', e);
+  }
+}
+
+function checkPersistedSession() {
+  const saved = localStorage.getItem('mate-session');
+  if (saved) {
+    try {
+      const session = JSON.parse(saved);
+      // Valid session must have these
+      if (session.roomId && session.participantId) {
+        enterApp(session, true); // true = silent rejoin
+      }
+    } catch (e) {
+      localStorage.removeItem('mate-session');
+    }
   }
 }
 initFirebase();
@@ -599,10 +616,30 @@ function renderGame() {
     window.hasSavedMatchResult = false;
   }
 
-  // Simplified Status labels (no redundancy)
-  if (gameStatusLabel) gameStatusLabel.textContent = gameState.active ? (isMyTurn ? "YOUR TURN" : "WAITING...") : "GAME FINISHED";
-  if (turnIndicator) turnIndicator.className = 'turn-chip ' + (gameState.active ? (isMyTurn ? 'live' : 'waiting') : 'finished');
-  if (turnIndicator) turnIndicator.textContent = gameState.active ? (isMyTurn ? "YOUR TURN" : "WAITING FOR MATE") : "GAME OVER";
+  // Consolidate status labels
+  if (gameStatusLabel) {
+    if (gameState.winner) {
+      gameStatusLabel.textContent = "GAME FINISHED";
+      gameStatusPill.className = 'status-pill finished';
+    } else if (gameState.active) {
+      gameStatusLabel.textContent = "LIVE MATCH";
+      gameStatusPill.className = 'status-pill live';
+    } else {
+      gameStatusLabel.textContent = "WAITING...";
+      gameStatusPill.className = 'status-pill waiting';
+    }
+  }
+
+  if (turnIndicator) {
+    turnIndicator.className = 'turn-chip ' + (gameState.active ? (isMyTurn ? 'live' : 'waiting') : 'finished');
+    if (gameState.winner) {
+      turnIndicator.textContent = "GAME OVER";
+    } else if (gameState.active) {
+      turnIndicator.textContent = isMyTurn ? "YOUR TURN" : "WAITING FOR MATE";
+    } else {
+      turnIndicator.textContent = "WAITING...";
+    }
+  }
   
   board.innerHTML = '';
   updateInstructions();
@@ -1284,12 +1321,21 @@ function renderRockPaperScissors() {
   board.appendChild(container);
 }
 
-function enterApp(roomState) {
+function enterApp(roomState, isSilentRejoin = false) {
   currentRoomId = roomState.roomId;
   myParticipantId = roomState.participantId;
   mySymbol = roomState.symbol;
   currentUsername = roomState.username;
-  availableGames = roomState.availableGames;
+  availableGames = roomState.availableGames || ['tic-tac-toe'];
+
+  // Save for persistence
+  localStorage.setItem('mate-session', JSON.stringify({
+    roomId: currentRoomId,
+    participantId: myParticipantId,
+    username: currentUsername,
+    symbol: mySymbol,
+    availableGames: availableGames
+  }));
 
   roomTitle.textContent = currentRoomId;
   meLabel.textContent = `${currentUsername} (${mySymbol})`;
@@ -1297,8 +1343,8 @@ function enterApp(roomState) {
   joinContainer.classList.add('hidden');
   appContainer.classList.remove('hidden');
 
-  if (!localStorage.getItem('mate-room-welcome')) {
-    showToast('Welcome to Mate! Start chatting and select a game.');
+  if (!isSilentRejoin && !localStorage.getItem('mate-room-welcome')) {
+    showToast('Welcome back to Mate!');
     localStorage.setItem('mate-room-welcome', '1');
   }
   
@@ -1382,7 +1428,10 @@ chatInput.addEventListener('keydown', (e) => {
   }
 });
 
-leaveButton.onclick = () => location.reload();
+leaveButton.onclick = () => {
+  localStorage.removeItem('mate-session');
+  location.reload();
+};
 
 // Bind Mobile Nav Events
 document.querySelectorAll('.nav-btn').forEach(btn => {
