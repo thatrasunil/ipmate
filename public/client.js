@@ -1424,6 +1424,14 @@ leaveButton.onclick = () => {
   location.reload();
 };
 
+const mobileLeaveBtn = document.getElementById('mobile-leave-btn');
+if (mobileLeaveBtn) {
+  mobileLeaveBtn.onclick = () => {
+    localStorage.removeItem('mate-session');
+    location.reload();
+  };
+}
+
 // Bind Mobile Nav Events
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {

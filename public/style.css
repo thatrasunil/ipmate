@@ -1547,6 +1547,18 @@ h2 i, h3 i, .status-banner i, .ghost-btn i, .primary-btn i {
   box-shadow: 0 0 15px var(--accent-primary);
 }
 
+.nav-btn.leave-style {
+  color: #f43f5e !important;
+}
+
+.nav-btn.leave-style i {
+  color: #f43f5e;
+}
+
+.nav-btn.leave-style:active {
+  background: rgba(244, 63, 94, 0.1);
+}
+
 .badge {
   position: absolute;
   top: 4px;
