@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="Mate - Real-time multiplayer gaming platform with chat and premium games">
+  <meta name="keywords" content="games, multiplayer, real-time, chat, gaming, tic-tac-toe, chess, battleship">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%AE%3C/text%3E%3C/svg%3E">
+  <title>Mate - Real-time Multiplayer Gaming</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+  <main class="page-shell">
+    <div class="bg-mesh">
+      <div class="mesh-sphere"></div>
+      <div class="mesh-sphere"></div>
+    </div>
+
+    <section class="join-panel" id="join-container">
+      <div class="join-card">
+        <h1>🎮 Mate</h1>
+        <p class="subcopy">Experience the ultimate real-time multiplayer gaming platform. Connect instantly, chat seamlessly, and compete in premium games with players worldwide.</p>
+
+        <div class="input-group">
+          <label class="field-label" for="username">Player Identity</label>
+          <input id="username" type="text" maxlength="24" placeholder="Enter your name" autocomplete="username" spellcheck="false">
+        </div>
+
+        <div class="input-group">
+          <label class="field-label" for="roomId">Secure Room ID</label>
+          <input id="roomId" type="text" maxlength="24" placeholder="e.g. ALPHA-9" autocomplete="off" spellcheck="false">
+        </div>
+
+        <button id="join-btn" class="primary-btn">
+          <span>Enter Arena</span>
+          <i class="fas fa-arrow-right"></i>
+        </button>
+        <p id="join-error" class="error-text" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="app-shell hidden" id="app-container">
+      <aside class="sidebar-card room-card view-container">
+        <div>
+          <h2 id="room-title"><i class="fas fa-home"></i> Room</h2>
+          <button id="copy-room-btn" class="ghost-btn"><i class="fas fa-copy"></i> Copy ID</button>
+        </div>
+
+        <div class="status-banner" id="connection-status"><i class="fas fa-wifi"></i> Connected</div>
+
+        <div>
+           <p class="field-label"><i class="fas fa-user-circle"></i> You</p>
+           <p id="me-label">-</p>
+        </div>
+
+        <div>
+           <p class="field-label"><i class="fas fa-users"></i> Participants</p>
+           <div id="participants-list"></div>
+        </div>
+
+        <button id="leave-btn" class="primary-btn pill-btn leave-btn"><i class="fas fa-sign-out-alt"></i> Leave Room</button>
+      </aside>
+
+      <section class="content-grid">
+        <div class="card game-card view-container view-active">
+          <div class="game-meta">
+            <div class="status-pill waiting" id="game-status">
+              <span class="live-dot"></span>
+              <span id="game-status-label">Waiting for mate...</span>
+            </div>
+            <div class="meta-actions">
+              <button id="sound-toggle" class="icon-btn" title="Toggle sound"><i class="fas fa-volume-up"></i></button>
+              <button id="reset-game" class="ghost-btn pill-btn"><i class="fas fa-redo"></i> Reset</button>
+            </div>
+          </div>
+
+          <div class="duo-row">
+            <div class="player-badge" id="player-me">
+              <div class="avatar-wrap">
+                <div class="avatar-ring">
+                  <div class="avatar-img" id="player-me-avatar">?</div>
+                </div>
+                <span class="status-dot online"></span>
+              </div>
+              <div class="player-copy">
+                <p class="player-name" id="player-me-name">You</p>
+                <div class="symbol-pill" id="player-me-symbol">-</div>
+                <div class="timer-pill"><i class="fas fa-clock"></i><span class="timer" id="player-me-timer">--:--</span></div>
+              </div>
+            </div>
+            <div class="vs-pill">vs</div>
+            <div class="player-badge ghost" id="player-opponent">
+              <div class="avatar-wrap">
+                <div class="avatar-ring">
+                  <div class="avatar-img" id="player-op-avatar">?</div>
+                </div>
+                <span class="status-dot waiting"></span>
+              </div>
+              <div class="player-copy">
+                <p class="player-name" id="player-op-name">Mate</p>
+                <div class="symbol-pill" id="player-op-symbol">-</div>
+                <div class="timer-pill"><i class="fas fa-clock"></i><span class="timer" id="player-op-timer">--:--</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="game-toolbar">
+            <div class="game-selector" id="game-selector"></div>
+            <div id="turn-indicator" class="turn-chip">Waiting...</div>
+          </div>
+
+          <div id="game-instructions" class="game-instructions">
+            <i class="fas fa-info-circle"></i>
+            <span id="instructions-text">Select a game to start playing!</span>
+          </div>
+
+          <div id="board" class="board"></div>
+        </div>
+
+        <div class="card chat-card view-container">
+          <div class="card-head chat-head">
+            <div class="chat-title">
+              <h3><i class="fas fa-comments"></i> Chat</h3>
+              <span id="chat-count" class="status-banner"><i class="fas fa-message"></i> 0 messages</span>
+            </div>
+            <div class="chat-actions">
+              <button id="emoji-toggle" class="icon-btn" title="Add reaction"><i class="fas fa-face-smile"></i></button>
+            </div>
+          </div>
+
+          <div id="typing-indicator" class="typing-pill hidden">
+            <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            <span id="typing-text">someone is typing...</span>
+          </div>
+          
+          <div id="messages" class="messages"></div>
+
+          <button id="scroll-bottom-btn" class="ghost-btn hidden" style="position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 10; padding: 8px 16px; border-radius: 99px; background: var(--bg-card); border-color: var(--accent-primary); color: var(--accent-primary); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+            <i class="fas fa-arrow-down"></i> New Messages
+          </button>
+
+          <div class="composer">
+            <input id="chat-input" type="text" placeholder="Your message...">
+            <button id="send-btn" class="primary-btn"><i class="fas fa-paper-plane"></i> Send</button>
+          </div>
+          <p id="chat-error" class="error-text"></p>
+        </div>
+      </section>
+
+      <nav class="mobile-nav">
+        <button data-view="game" class="nav-btn active">
+          <i class="fas fa-gamepad"></i>
+          <span>Arena</span>
+        </button>
+        <button data-view="chat" class="nav-btn">
+          <i class="fas fa-comments"></i>
+          <span>Chat</span>
+          <span class="badge hidden">0</span>
+        </button>
+        <button data-view="room" class="nav-btn">
+          <i class="fas fa-users"></i>
+          <span>Room</span>
+        </button>
+      </nav>
+    </section>
+
+    <div id="toast" class="toast hidden"></div>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
+
+
+
