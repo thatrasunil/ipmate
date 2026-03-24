@@ -30,9 +30,24 @@ if (!admin.apps.length) {
 
 const db = admin.apps.length ? admin.firestore() : null;
 
+if (!db) {
+  console.error('FATAL: Firebase Firestore is not initialized.');
+  if (!process.env.FIREBASE_PROJECT_ID) console.error('MISSING: FIREBASE_PROJECT_ID');
+  if (!process.env.FIREBASE_CLIENT_EMAIL) console.error('MISSING: FIREBASE_CLIENT_EMAIL');
+  if (!process.env.FIREBASE_PRIVATE_KEY) console.error('MISSING: FIREBASE_PRIVATE_KEY');
+}
+
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
+
+// Detailed error handling wrapper
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch((err) => {
+    console.error(`ERROR in ${req.method} ${req.path}:`, err);
+    res.status(500).json({ error: 'Internal server error.', message: err.message });
+  });
+};
 
 // Static game modules for Vercel NFT tracing
 const games = {
@@ -84,7 +99,7 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-app.post('/api/join', async (req, res) => {
+app.post('/api/join', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { username, roomId } = req.body;
   const vUser = validateUsername(username);
@@ -158,7 +173,7 @@ app.post('/api/join', async (req, res) => {
   }
 });
 
-app.post('/api/move', async (req, res) => {
+app.post('/api/move', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { roomId, participantId, move } = req.body;
   if (!roomId || !participantId) return res.status(400).json({ error: 'Missing required fields.' });
@@ -192,7 +207,7 @@ app.post('/api/move', async (req, res) => {
   }
 });
 
-app.post('/api/select-game', async (req, res) => {
+app.post('/api/select-game', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { roomId, gameType } = req.body;
   if (!roomId || !gameType || !games[gameType]) return res.status(400).json({ error: 'Invalid game type or room.' });
@@ -237,7 +252,7 @@ app.post('/api/select-game', async (req, res) => {
   }
 });
 
-app.post('/api/reset-game', async (req, res) => {
+app.post('/api/reset-game', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { roomId } = req.body;
   if (!roomId) return res.status(400).json({ error: 'Room ID required.' });
@@ -259,7 +274,7 @@ app.post('/api/reset-game', async (req, res) => {
   }
 });
 
-app.post('/api/typing', async (req, res) => {
+app.post('/api/typing', asyncHandler(async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { roomId, participantId, isTyping } = req.body;
   if (!roomId || !participantId) return res.status(400).json({ error: 'Missing fields.' });
