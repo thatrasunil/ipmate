@@ -25,37 +25,14 @@ if (fs.existsSync(path.resolve(serviceAccountPath))) {
 const db = admin.apps.length ? admin.firestore() : null;
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-
-const PORT = process.env.PORT || 3000;
-const MAX_NAME_LENGTH = 24;
-const MAX_ROOM_LENGTH = 24;
-const MAX_MESSAGE_LENGTH = 300;
-
-// Serve Firebase config to client via endpoint
-app.get('/api/config', (req, res) => {
-  res.json({
-    apiKey: process.env.FIREBASE_API_KEY,
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.FIREBASE_APP_ID,
-    measurementId: process.env.FIREBASE_MEASUREMENT_ID
-  });
-});
-
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+if (!db) {
+  console.error('FATAL: Firebase Firestore is not initialized. Please check your environment variables.');
+}
 
-const rooms = new Map();
 const games = {};
-
-// Load game modules
 const gamesDir = path.join(__dirname, 'games');
 if (fs.existsSync(gamesDir)) {
   fs.readdirSync(gamesDir).forEach(file => {
@@ -66,15 +43,11 @@ if (fs.existsSync(gamesDir)) {
   });
 }
 
-function createRoom(gameType = 'tic-tac-toe') {
-  const gameModule = games[gameType] || games['tic-tac-toe'];
-  return {
-    participants: new Map(),
-    gameType,
-    game: gameModule.createInitialState(),
-  };
-}
+const PORT = process.env.PORT || 3000;
+const MAX_NAME_LENGTH = 24;
+const MAX_ROOM_LENGTH = 24;
 
+// Validation Helpers
 function sanitizeText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
@@ -94,117 +67,53 @@ function validateRoomId(value) {
   return { value: roomId };
 }
 
-function validateMessage(value) {
-  const text = sanitizeText(value);
-  if (!text) return { error: 'Message cannot be empty.' };
-  if (text.length > MAX_MESSAGE_LENGTH) return { error: `Message must be ${MAX_MESSAGE_LENGTH} characters or fewer.` };
-  return { value: text };
-}
-
-function createParticipantId() {
-  return crypto.randomUUID();
-}
-
-function getParticipantList(room) {
-  return Array.from(room.participants.values()).map((participant) => ({
-    participantId: participant.participantId,
-    username: participant.username,
-    symbol: participant.symbol,
-  }));
-}
-
-function getRoomState(room, selfSocketId) {
-  const self = room.participants.get(selfSocketId);
-  return {
-    roomId: self ? self.roomId : null,
-    gameType: room.gameType,
-    availableGames: Object.keys(games),
-    participants: getParticipantList(room),
-    me: self ? {
-      participantId: self.participantId,
-      username: self.username,
-      symbol: self.symbol,
-    } : null,
-    game: room.game,
-  };
-}
-
-function emitRoomState(roomId) {
-  const room = rooms.get(roomId);
-  if (!room) return;
-  io.to(roomId).emit('game-update', { state: room.game, type: room.gameType });
-  io.to(roomId).emit('participants-update', getParticipantList(room));
-}
-
-function findRoomIdBySocketId(socketId) {
-  for (const [roomId, room] of rooms.entries()) {
-    if (room.participants.has(socketId)) return roomId;
-  }
-  return null;
-}
-
-function removeParticipant(socket, roomId, reason) {
-  const room = rooms.get(roomId);
-  if (!room) return;
-
-  const participant = room.participants.get(socket.id);
-  if (!participant) return;
-
-  room.participants.delete(socket.id);
-  socket.leave(roomId);
-  
-  // Vanish messages logic: Notify clients to fade out messages from this user
-  io.to(roomId).emit('vanish-messages', { participantId: participant.participantId });
-
-  socket.to(roomId).emit('participant-left', {
-    participantId: participant.participantId,
-    username: participant.username,
-    reason,
+// API Endpoints
+app.get('/api/config', (req, res) => {
+  res.json({
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID,
+    measurementId: process.env.FIREBASE_MEASUREMENT_ID
   });
+});
 
-  if (room.participants.size === 0) {
-    rooms.delete(roomId);
-    
-    // Auto-Deletion: Delete messages from Firestore when room is empty
-    if (db) {
-      db.collection('messages')
-        .where('roomId', '==', roomId)
-        .get()
-        .then((snapshot) => {
-          const batch = db.batch();
-          snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-          return batch.commit();
-        })
-        .then(() => console.log(`Auto-deleted messages for room: ${roomId}`))
-        .catch((err) => console.error(`Error auto-deleting messages for room ${roomId}:`, err));
-    }
-    return;
+app.post('/api/join', async (req, res) => {
+  const { username, roomId } = req.body;
+  const vUser = validateUsername(username);
+  const vRoom = validateRoomId(roomId);
+
+  if (vUser.error || vRoom.error) {
+    return res.status(400).json({ error: vUser.error || vRoom.error });
   }
 
-  emitRoomState(roomId);
-}
+  const roomRef = db.collection('rooms').doc(vRoom.value);
+  const participantsRef = roomRef.collection('participants');
 
-io.on('connection', (socket) => {
-  socket.on('join-room', ({ username, roomId }, callback = () => {}) => {
-    const validatedUsername = validateUsername(username);
-    const validatedRoomId = validateRoomId(roomId);
+  try {
+    const roomSnap = await roomRef.get();
+    let roomData = roomSnap.data();
 
-    if (validatedUsername.error || validatedRoomId.error) {
-      callback({ error: validatedUsername.error || validatedRoomId.error });
-      return;
+    // Create room if it doesn't exist
+    if (!roomSnap.exists) {
+      const gameType = 'tic-tac-toe';
+      roomData = {
+        roomId: vRoom.value,
+        gameType,
+        gameState: games[gameType].createInitialState(),
+        lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+      };
+      await roomRef.set(roomData);
     }
 
-    let room = rooms.get(validatedRoomId.value);
-    if (!room) {
-      room = createRoom();
-      rooms.set(validatedRoomId.value, room);
+    const participantsSnap = await participantsRef.get();
+    if (participantsSnap.size >= 2) {
+      return res.status(400).json({ error: 'Room is full.' });
     }
 
-    if (room.participants.size >= 2) {
-      callback({ error: 'Room is full.' });
-      return;
-    }
-
+    const docId = crypto.randomUUID();
     const symbolMap = {
       'tic-tac-toe': ['X', 'O'],
       'connect-four': ['R', 'Y'],
@@ -217,47 +126,76 @@ io.on('connection', (socket) => {
       'memory-match': ['P1', 'P2'],
       'dots-and-boxes': ['P1', 'P2']
     };
-    const symbols = symbolMap[room.gameType] || ['P1', 'P2'];
-    const symbol = room.participants.size === 0 ? symbols[0] : symbols[1];
+    const symbols = symbolMap[roomData.gameType] || ['P1', 'P2'];
+    const symbol = participantsSnap.size === 0 ? symbols[0] : symbols[1];
 
     const participant = {
-      socketId: socket.id,
-      roomId: validatedRoomId.value,
-      participantId: createParticipantId(),
-      username: validatedUsername.value,
+      participantId: docId,
+      username: vUser.value,
       symbol,
+      isTyping: false,
+      lastSeen: admin.firestore.FieldValue.serverTimestamp()
     };
 
-    room.participants.set(socket.id, participant);
-    socket.join(validatedRoomId.value);
-    socket.data.roomId = validatedRoomId.value;
-    socket.data.participantId = participant.participantId;
+    await participantsRef.doc(docId).set(participant);
 
-    callback({
+    res.json({
       success: true,
-      roomState: getRoomState(room, socket.id),
+      participantId: docId,
+      username: vUser.value,
+      symbol,
+      roomId: vRoom.value,
+      gameType: roomData.gameType,
+      availableGames: Object.keys(games)
     });
+  } catch (err) {
+    console.error('Error in /api/join:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
-    socket.to(validatedRoomId.value).emit('participant-joined', {
-      participantId: participant.participantId,
-      username: participant.username,
-      symbol: participant.symbol,
-    });
+app.post('/api/move', async (req, res) => {
+  const { roomId, participantId, move } = req.body;
+  if (!roomId || !participantId) return res.status(400).json({ error: 'Missing required fields.' });
 
-    emitRoomState(validatedRoomId.value);
-  });
+  const roomRef = db.collection('rooms').doc(roomId);
+  const partRef = roomRef.collection('participants').doc(participantId);
 
-  socket.on('select-game', ({ gameType }) => {
-    const roomId = socket.data.roomId;
-    if (!roomId || !games[gameType]) return;
+  try {
+    const [roomSnap, partSnap] = await Promise.all([roomRef.get(), partRef.get()]);
+    if (!roomSnap.exists || !partSnap.exists) {
+      return res.status(404).json({ error: 'Room or participant not found.' });
+    }
 
-    const room = rooms.get(roomId);
-    if (!room) return;
+    const roomData = roomSnap.data();
+    const participant = partSnap.data();
+    const gameModule = games[roomData.gameType];
 
-    room.gameType = gameType;
-    room.game = games[gameType].createInitialState();
-    
-    // Re-assign symbols based on new game
+    if (gameModule && gameModule.isValidMove(roomData.gameState, participant, move)) {
+      const nextState = gameModule.applyMove(roomData.gameState, participant, move);
+      await roomRef.update({
+        gameState: nextState,
+        lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+      });
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Invalid move.' });
+    }
+  } catch (err) {
+    console.error('Error in /api/move:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.post('/api/select-game', async (req, res) => {
+  const { roomId, gameType } = req.body;
+  if (!roomId || !gameType || !games[gameType]) return res.status(400).json({ error: 'Invalid game type or room.' });
+
+  const roomRef = db.collection('rooms').doc(roomId);
+  const partsRef = roomRef.collection('participants');
+
+  try {
+    const participantsSnap = await partsRef.get();
     const symbolMap = {
       'tic-tac-toe': ['X', 'O'],
       'connect-four': ['R', 'Y'],
@@ -272,90 +210,68 @@ io.on('connection', (socket) => {
     };
     const symbols = symbolMap[gameType] || ['P1', 'P2'];
     
-    let idx = 0;
-    room.participants.forEach(p => {
+    // Update participant symbols for new game in a batch
+    const batch = db.batch();
+    participantsSnap.docs.forEach((doc, idx) => {
       if (idx < symbols.length) {
-        p.symbol = symbols[idx++];
+        batch.update(doc.ref, { symbol: symbols[idx] });
       }
     });
 
-    io.to(roomId).emit('game-changed', { 
-      gameType, 
-      state: room.game,
-      participants: getParticipantList(room)
+    batch.update(roomRef, {
+      gameType,
+      gameState: games[gameType].createInitialState(),
+      lastUpdate: admin.firestore.FieldValue.serverTimestamp()
     });
-  });
 
-  socket.on('send-message', ({ text }) => {
-    const roomId = socket.data.roomId;
-    const room = rooms.get(roomId);
-    if (!room) return;
-
-    const participant = room.participants.get(socket.id);
-    if (!participant) return;
-
-    const validatedText = validateMessage(text);
-    if (validatedText.error) return;
-
-    io.to(roomId).emit('new-message', {
-      participantId: participant.participantId,
-      username: participant.username,
-      text: validatedText.value,
-      timestamp: Date.now(),
-    });
-  });
-
-  socket.on('user-typing', () => {
-    const roomId = socket.data.roomId;
-    const participant = rooms.get(roomId)?.participants.get(socket.id);
-    if (!roomId || !participant) return;
-    socket.to(roomId).emit('user-typing', participant.username);
-  });
-
-  socket.on('user-stopped-typing', () => {
-    const roomId = socket.data.roomId;
-    const participant = rooms.get(roomId)?.participants.get(socket.id);
-    if (!roomId || !participant) return;
-    socket.to(roomId).emit('user-stopped-typing', participant.username);
-  });
-
-  socket.on('game-move', (move) => {
-    const roomId = socket.data.roomId;
-    const room = rooms.get(roomId);
-    if (!room) return;
-
-    const participant = room.participants.get(socket.id);
-    const gameModule = games[room.gameType];
-
-    if (participant && gameModule && gameModule.isValidMove(room.game, participant, move)) {
-      room.game = gameModule.applyMove(room.game, participant, move);
-      io.to(roomId).emit('game-update', { state: room.game, type: room.gameType });
-    }
-  });
-
-  socket.on('reset-game', () => {
-    const roomId = socket.data.roomId;
-    const room = rooms.get(roomId);
-    if (!room) return;
-
-    const gameModule = games[room.gameType];
-    room.game = gameModule.createInitialState();
-
-    io.to(roomId).emit('game-update', { state: room.game, type: room.gameType });
-    io.to(roomId).emit('game-reset');
-  });
-
-  socket.on('leave-room', () => {
-    removeParticipant(socket, socket.data.roomId, 'left');
-  });
-
-  socket.on('disconnect', () => {
-    const roomId = socket.data.roomId || findRoomIdBySocketId(socket.id);
-    if (roomId) removeParticipant(socket, roomId, 'disconnected');
-  });
+    await batch.commit();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error in /api/select-game:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
 });
 
-server.listen(PORT, () => {
+app.post('/api/reset-game', async (req, res) => {
+  const { roomId } = req.body;
+  if (!roomId) return res.status(400).json({ error: 'Room ID required.' });
+
+  const roomRef = db.collection('rooms').doc(roomId);
+  try {
+    const roomSnap = await roomRef.get();
+    if (!roomSnap.exists) return res.status(404).json({ error: 'Room not found.' });
+
+    const roomData = roomSnap.data();
+    await roomRef.update({
+      gameState: games[roomData.gameType].createInitialState(),
+      lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error in /api/reset-game:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.post('/api/typing', async (req, res) => {
+  const { roomId, participantId, isTyping } = req.body;
+  if (!roomId || !participantId) return res.status(400).json({ error: 'Missing fields.' });
+
+  try {
+    await db.collection('rooms').doc(roomId)
+      .collection('participants').doc(participantId)
+      .update({ isTyping: !!isTyping });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update typing state.' });
+  }
+});
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
 

@@ -259,98 +259,86 @@ function markUserStoppedTyping(username) {
 }
 
 function connectSocket() {
-  if (socket) return;
-  socket = io();
-  if (!listenersBound) {
-    bindSocketListeners();
-    listenersBound = true;
-  }
+  // Socket.io is removed. Subscriptions are handled by Firestore onSnapshot.
 }
 
-function bindSocketListeners() {
-  socket.on('connect', () => {
-    setConnectionStatus('Connected', false);
-    if (currentRoomId && currentUsername) {
-      showToast('Reconnected successfully!');
-      socket.emit('join-room', { username: currentUsername, roomId: currentRoomId }, (res) => {
-        if (res.success) enterApp(res.roomState);
-      });
+function sendMove(move) {
+  if (!currentRoomId || !myParticipantId) return;
+  fetch('/api/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roomId: currentRoomId, participantId: myParticipantId, move })
+  });
+}
+
+function initRealtimeListeners() {
+  if (!db || !currentRoomId) return;
+
+  // 1. Listen for Room & Game state
+  db.collection('rooms').doc(currentRoomId).onSnapshot((doc) => {
+    if (!doc.exists) return;
+    const data = doc.data();
+    
+    // Update game state
+    if (JSON.stringify(gameState) !== JSON.stringify(data.gameState) || gameType !== data.gameType) {
+      gameState = data.gameState;
+      gameType = data.gameType;
+      renderGame();
     }
+    
+    // We should also check if availableGames list is in the room doc if we want it dynamic
+    // For now we keep the local list from join response
   });
-  
-  socket.on('connect_error', () => {
-    setConnectionStatus('Connection Error', true);
-    showToast('Connection error. Trying to reconnect...');
-  });
-  
-  socket.on('disconnect', () => {
-    setConnectionStatus('Disconnected', true);
-    showToast('Connection lost. Reconnecting...');
-  });
-  
-  socket.on('participants-update', (nextParticipants) => {
+
+  // 2. Listen for Participants & Typing
+  db.collection('rooms').doc(currentRoomId).collection('participants').onSnapshot((snapshot) => {
+    const nextParticipants = [];
+    snapshot.forEach(doc => {
+      const p = doc.data();
+      nextParticipants.push(p);
+      
+      // Update typing indicators
+      if (p.participantId !== myParticipantId) {
+        if (p.isTyping) markUserTyping(p.username);
+        else markUserStoppedTyping(p.username);
+      }
+      
+      // Update my symbol if it changed (e.g. game changed)
+      if (p.participantId === myParticipantId) {
+        mySymbol = p.symbol;
+      }
+    });
+    
     participants = nextParticipants;
     renderParticipants();
     renderGame();
   });
 
-  socket.on('user-typing', (username) => {
-    if (!username || username === currentUsername) return;
-    markUserTyping(username);
-  });
+  // 3. Listen for Messages
+  db.collection('rooms').doc(currentRoomId).collection('messages')
+    .orderBy('timestamp', 'asc')
+    .limitToLast(50)
+    .onSnapshot(async (snapshot) => {
+      // Find only new messages
+      const newMsgs = [];
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added') {
+          newMsgs.push(change.doc.data());
+        }
+      });
+      
+      if (newMsgs.length === 0) return;
 
-  socket.on('user-stopped-typing', (username) => {
-    if (!username || username === currentUsername) return;
-    markUserStoppedTyping(username);
-  });
-
-  socket.on('new-message', async (message) => {
-    const decryptedText = await decryptMessage(message.text, currentRoomId);
-    messages.push({ ...message, text: decryptedText, type: 'chat' });
-    markUserStoppedTyping(message.username);
-    renderMessages();
-  });
-
-  socket.on('vanish-messages', ({ participantId }) => {
-    const userMsgs = document.querySelectorAll(`.message[data-participant="${participantId}"]`);
-    userMsgs.forEach(msg => {
-      msg.style.opacity = '0';
-      msg.style.transform = 'scale(0.9)';
-      setTimeout(() => msg.remove(), 500);
+      for (const msg of newMsgs) {
+        // Avoid duplicate rendering of history we already have
+        if (messages.find(m => m.timestamp === msg.timestamp && m.participantId === msg.participantId)) continue;
+        
+        const decryptedText = await decryptMessage(msg.text, currentRoomId);
+        messages.push({ ...msg, text: decryptedText, type: 'chat' });
+      }
+      
+      renderMessages();
     });
-    messages = messages.filter(m => m.participantId !== participantId);
-    updateChatCount();
-  });
-
-  socket.on('game-update', ({ state, type }) => {
-    gameState = state;
-    gameType = type;
-    renderGame();
-  });
-
-  socket.on('game-changed', ({ gameType: nextType, state, participants: nextParts }) => {
-    gameType = nextType;
-    gameState = state;
-    participants = nextParts;
-    const me = participants.find(p => p.participantId === myParticipantId);
-    if (me) mySymbol = me.symbol;
-    renderParticipants();
-    renderGame();
-    renderGameTabs();
-    showToast(`Game changed to ${gameType}`);
-  });
-
-  socket.on('participant-joined', ({ username }) => {
-    showToast(`${username} joined`);
-  });
-
-  socket.on('participant-left', ({ username }) => {
-    showToast(`${username} left`);
-  });
-
-  socket.on('game-reset', () => {
-    showToast('Game reset');
-  });
 }
 
 function setConnectionStatus(label, warning) {
@@ -498,7 +486,11 @@ function renderGameTabs() {
 }
 
 window.selectGame = (type) => {
-  if (socket) socket.emit('select-game', { gameType: type });
+  fetch('/api/select-game', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roomId: currentRoomId, gameType: type })
+  });
 };
 
 function updateInstructions() {
@@ -688,7 +680,7 @@ function renderChess() {
             selectedPiece = null;
           } else {
             haptic();
-            socket.emit('game-move', { from: selectedPiece, to: { x, y } });
+            sendMove({ from: selectedPiece, to: { x, y } });
             selectedPiece = null;
           }
           renderGame();
@@ -727,7 +719,7 @@ function renderHangman() {
       btn.onclick = () => {
         if (input.value) {
           haptic();
-          socket.emit('game-move', { word: input.value });
+          sendMove({ word: input.value });
         }
       };
       container.appendChild(input);
@@ -766,7 +758,7 @@ function renderHangman() {
         btn.disabled = gameState.guessed.includes(l);
         btn.onclick = () => {
         haptic();
-        socket.emit('game-move', { letter: l });
+        sendMove({ letter: l });
       };
         keyboard.appendChild(btn);
       });
@@ -824,7 +816,7 @@ function renderBattleship() {
           cell.onclick = () => {
             if (gameState.phase === 'battle' && gameState.turn === mySymbol) {
               haptic();
-            socket.emit('game-move', { x: c, y: r });
+            sendMove({ x: c, y: r });
             }
           };
         } else {
@@ -845,7 +837,7 @@ function renderBattleship() {
               const count = window.tempPlacement.flat().filter(x => x).length;
               if (count === 5) {
                 haptic();
-          socket.emit('game-move', { board: window.tempPlacement, ships: [] });
+          sendMove({ board: window.tempPlacement, ships: [] });
                 window.tempPlacement = null;
               }
               renderGame();
@@ -917,7 +909,7 @@ function renderCheckers() {
             selectedPiece = null;
           } else {
             haptic();
-            socket.emit('game-move', { from: selectedPiece, to: { x, y } });
+            sendMove({ from: selectedPiece, to: { x, y } });
             selectedPiece = null;
           }
           renderGame();
@@ -969,7 +961,7 @@ function renderOthello() {
       square.onclick = () => {
         if (!gameState.active || gameState.turn !== mySymbol) return;
         haptic();
-        socket.emit('game-move', { r, c });
+        sendMove({ r, c });
       };
 
       container.appendChild(square);
@@ -1002,7 +994,7 @@ function renderMemoryMatch() {
     btn.onclick = () => {
       if (gameState.active && gameState.turn === mySymbol) {
         haptic();
-        socket.emit('game-move', { index: i });
+        sendMove({ index: i });
       }
     };
 
@@ -1063,7 +1055,7 @@ function renderDotsAndBoxes() {
       line.style.cursor = 'pointer';
       line.onclick = () => {
         haptic();
-        socket.emit('game-move', { type: 'h', r, c });
+        sendMove({ type: 'h', r, c });
       };
       container.appendChild(line);
     }
@@ -1082,7 +1074,7 @@ function renderDotsAndBoxes() {
       line.style.cursor = 'pointer';
       line.onclick = () => {
         haptic();
-        socket.emit('game-move', { type: 'v', r, c });
+        sendMove({ type: 'v', r, c });
       };
       container.appendChild(line);
     }
@@ -1138,7 +1130,7 @@ function renderTicTacToe() {
     btn.onclick = () => {
       if (!cell && gameState.turn === mySymbol) {
         haptic();
-        socket.emit('game-move', { index: i });
+        sendMove({ index: i });
       }
     };
 
@@ -1198,7 +1190,7 @@ function renderConnectFour() {
       div.onclick = () => {
         if (!cell && gameState.turn === mySymbol) {
           haptic();
-          socket.emit('game-move', { col: ci });
+          sendMove({ col: ci });
         }
       };
 
@@ -1283,7 +1275,7 @@ function renderRockPaperScissors() {
 
     btn.onclick = () => {
       haptic();
-      socket.emit('game-move', { choice: name });
+      sendMove({ choice: name });
     };
     choicesContainer.appendChild(btn);
   });
@@ -1294,16 +1286,13 @@ function renderRockPaperScissors() {
 
 function enterApp(roomState) {
   currentRoomId = roomState.roomId;
-  myParticipantId = roomState.me.participantId;
-  mySymbol = roomState.me.symbol;
-  participants = roomState.participants;
-  gameState = roomState.game;
-  gameType = roomState.gameType;
+  myParticipantId = roomState.participantId;
+  mySymbol = roomState.symbol;
+  currentUsername = roomState.username;
   availableGames = roomState.availableGames;
-  currentUsername = roomState.me.username;
 
   roomTitle.textContent = currentRoomId;
-  meLabel.textContent = `${roomState.me.username} (${mySymbol})`;
+  meLabel.textContent = `${currentUsername} (${mySymbol})`;
   
   joinContainer.classList.add('hidden');
   appContainer.classList.remove('hidden');
@@ -1313,88 +1302,78 @@ function enterApp(roomState) {
     localStorage.setItem('mate-room-welcome', '1');
   }
   
-  if (db && currentRoomId) {
-    db.collection('messages')
-      .where('roomId', '==', currentRoomId)
-      .orderBy('timestamp', 'asc')
-      .limit(50)
-      .get()
-      .then(async (snapshot) => {
-         const history = [];
-         for (const doc of snapshot.docs) {
-           const data = doc.data();
-           if (data.text) {
-             data.text = await decryptMessage(data.text, currentRoomId);
-           }
-           history.push(data);
-         }
-         if (history.length > 0) {
-            messages = [...history, ...messages];
-            renderMessages();
-         }
-      })
-      .catch(e => console.error("Error loading chat history:", e));
-  }
+  // Initialize Real-time Listeners
+  initRealtimeListeners();
   
   renderParticipants();
   renderGameTabs();
   renderGame();
   
-  // Set initial mobile view
   if (window.innerWidth <= 1100) {
     switchMobileView('game');
   }
 }
 
 joinButton.onclick = () => {
-  console.log('Join button clicked');
   const username = usernameInput.value.trim();
   const roomId = roomIdInput.value.trim();
-  console.log('Username:', username, 'Room ID:', roomId);
-  if (!username || !roomId) {
-    console.log('Missing username or roomId');
-    return;
-  }
-  connectSocket();
-  socket.emit('join-room', { username, roomId }, (res) => {
-    console.log('Join response:', res);
-    if (res.success) enterApp(res.roomState);
+  if (!username || !roomId) return;
+
+  fetch('/api/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, roomId })
+  })
+  .then(res => res.json())
+  .then(res => {
+    if (res.success) enterApp(res);
     else joinError.textContent = res.error;
+  })
+  .catch(err => {
+    joinError.textContent = 'Server error. Please try again.';
   });
 };
 
 sendButton.onclick = async () => {
   const text = chatInput.value.trim();
-  if (text && socket) {
-    // Encrypt message for E2EE
+  if (text && currentRoomId) {
     const encryptedText = await encryptMessage(text, currentRoomId);
     
-    socket.emit('send-message', { text: encryptedText });
-    
-    if (db) {
-      db.collection('messages').add({
-        roomId: currentRoomId,
-        participantId: myParticipantId,
-        username: currentUsername,
-        text: encryptedText,
-        timestamp: Date.now(),
-        type: 'chat'
-      }).catch(e => console.error("Error saving message", e));
-    }
+    db.collection('rooms').doc(currentRoomId).collection('messages').add({
+      roomId: currentRoomId,
+      participantId: myParticipantId,
+      username: currentUsername,
+      text: encryptedText,
+      timestamp: Date.now(),
+      type: 'chat'
+    }).catch(e => console.error("Error saving message", e));
 
-    socket.emit('user-stopped-typing');
+    fetch('/api/typing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roomId: currentRoomId, participantId: myParticipantId, isTyping: false })
+    });
+
     chatInput.value = '';
   }
 };
 
 chatInput.addEventListener('input', () => {
-  if (!socket) return;
-  socket.emit('user-typing');
+  if (!currentRoomId) return;
+  fetch('/api/typing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roomId: currentRoomId, participantId: myParticipantId, isTyping: true })
+  });
 
   clearTimeout(typingTimeout);
   typingTimeout = setTimeout(() => {
-    socket.emit('user-stopped-typing');
-  }, 800);
+    fetch('/api/typing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roomId: currentRoomId, participantId: myParticipantId, isTyping: false })
+    });
+  }, 1500);
 });
 
 chatInput.addEventListener('keydown', (e) => {
@@ -1429,9 +1408,11 @@ window.addEventListener('resize', () => {
 });
 
 resetButton.onclick = () => {
-  if (socket) {
-    socket.emit('reset-game');
-  }
+  fetch('/api/reset-game', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roomId: currentRoomId })
+  });
 };
 
 if (soundToggle) {
