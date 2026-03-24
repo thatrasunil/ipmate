@@ -1,14 +1,12 @@
 require('dotenv').config();
 const express = require('express');
-const http = require('http');
 const crypto = require('crypto');
-const { Server } = require('socket.io');
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
 
 // Initialize Firebase Admin
-const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || path.join(__dirname, 'serviceAccount.json');
+const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || path.join(__dirname, '../serviceAccount.json');
 
 if (!admin.apps.length) {
   if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
@@ -27,8 +25,6 @@ if (!admin.apps.length) {
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount)
     });
-  } else {
-    console.warn(`WARNING: No Firebase credentials found. Firestore features will be disabled.`);
   }
 }
 
@@ -36,24 +32,22 @@ const db = admin.apps.length ? admin.firestore() : null;
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '../public')));
 
-if (!db) {
-  console.error('FATAL: Firebase Firestore is not initialized. Please ensure FIREBASE_PRIVATE_KEY and FIREBASE_CLIENT_EMAIL are set correctly.');
-}
+// Static game modules for Vercel NFT tracing
+const games = {
+  'tic-tac-toe': require('../games/tic-tac-toe'),
+  'connect-four': require('../games/connect-four'),
+  'checkers': require('../games/checkers'),
+  'othello': require('../games/othello'),
+  'chess': require('../games/chess'),
+  'rock-paper-scissors': require('../games/rock-paper-scissors'),
+  'battleship': require('../games/battleship'),
+  'hangman': require('../games/hangman'),
+  'memory-match': require('../games/memory-match'),
+  'dots-and-boxes': require('../games/dots-and-boxes')
+};
 
-const games = {};
-const gamesDir = path.join(__dirname, 'games');
-if (fs.existsSync(gamesDir)) {
-  fs.readdirSync(gamesDir).forEach(file => {
-    if (file.endsWith('.js')) {
-      const gameName = file.replace('.js', '');
-      games[gameName] = require(path.join(gamesDir, file));
-    }
-  });
-}
-
-const PORT = process.env.PORT || 3000;
 const MAX_NAME_LENGTH = 24;
 const MAX_ROOM_LENGTH = 24;
 
@@ -91,6 +85,7 @@ app.get('/api/config', (req, res) => {
 });
 
 app.post('/api/join', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { username, roomId } = req.body;
   const vUser = validateUsername(username);
   const vRoom = validateRoomId(roomId);
@@ -106,7 +101,6 @@ app.post('/api/join', async (req, res) => {
     const roomSnap = await roomRef.get();
     let roomData = roomSnap.data();
 
-    // Create room if it doesn't exist
     if (!roomSnap.exists) {
       const gameType = 'tic-tac-toe';
       roomData = {
@@ -165,6 +159,7 @@ app.post('/api/join', async (req, res) => {
 });
 
 app.post('/api/move', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { roomId, participantId, move } = req.body;
   if (!roomId || !participantId) return res.status(400).json({ error: 'Missing required fields.' });
 
@@ -198,6 +193,7 @@ app.post('/api/move', async (req, res) => {
 });
 
 app.post('/api/select-game', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { roomId, gameType } = req.body;
   if (!roomId || !gameType || !games[gameType]) return res.status(400).json({ error: 'Invalid game type or room.' });
 
@@ -220,7 +216,6 @@ app.post('/api/select-game', async (req, res) => {
     };
     const symbols = symbolMap[gameType] || ['P1', 'P2'];
     
-    // Update participant symbols for new game in a batch
     const batch = db.batch();
     participantsSnap.docs.forEach((doc, idx) => {
       if (idx < symbols.length) {
@@ -243,6 +238,7 @@ app.post('/api/select-game', async (req, res) => {
 });
 
 app.post('/api/reset-game', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { roomId } = req.body;
   if (!roomId) return res.status(400).json({ error: 'Room ID required.' });
 
@@ -264,6 +260,7 @@ app.post('/api/reset-game', async (req, res) => {
 });
 
 app.post('/api/typing', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not initialized.' });
   const { roomId, participantId, isTyping } = req.body;
   if (!roomId || !participantId) return res.status(400).json({ error: 'Missing fields.' });
 
@@ -278,10 +275,7 @@ app.post('/api/typing', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, '../public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
-
+module.exports = app;
