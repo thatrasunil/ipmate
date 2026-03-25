@@ -83,7 +83,6 @@ const playerMeSymbol = document.getElementById('player-me-symbol');
 const playerOpSymbol = document.getElementById('player-op-symbol');
 const playerMeAvatar = document.getElementById('player-me-avatar');
 const playerOpAvatar = document.getElementById('player-op-avatar');
-const emojiToggle = document.getElementById('emoji-toggle');
 const typingText = document.getElementById('typing-text');
 const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
 const instructionsText = document.getElementById('instructions-text');
@@ -1999,7 +1998,7 @@ function toggleMute() {
   isMuted = !isMuted;
   localStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
   const btn = document.getElementById('toggle-audio-btn');
-  btn.classList.toggle('muted', isMuted);
+  btn.classList.toggle('off', isMuted);
   btn.innerHTML = `<i class="fas fa-microphone${isMuted ? '-slash' : ''}"></i>`;
 }
 
@@ -2008,7 +2007,7 @@ function toggleCamera() {
   isCameraOff = !isCameraOff;
   localStream.getVideoTracks().forEach(track => track.enabled = !isCameraOff);
   const btn = document.getElementById('toggle-video-btn');
-  btn.classList.toggle('muted', isCameraOff);
+  btn.classList.toggle('off', isCameraOff);
   btn.innerHTML = `<i class="fas fa-video${isCameraOff ? '-slash' : ''}"></i>`;
 }
 
@@ -2169,10 +2168,6 @@ if (soundToggle) {
     soundToggle.innerHTML = `<i class="fas fa-volume-${soundEnabled ? 'up' : 'mute'}"></i>`;
     showToast(soundEnabled ? 'Sound on' : 'Sound muted');
   };
-}
-
-if (emojiToggle) {
-  emojiToggle.onclick = () => showToast('Reactions coming soon');
 }
 
 function fireConfetti() {
