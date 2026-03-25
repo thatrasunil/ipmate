@@ -629,19 +629,28 @@ function renderGame() {
   }
   
   board.innerHTML = '';
-  updateInstructions();
+  try {
+    updateInstructions();
+  } catch (e) {
+    console.error("Instructions render error", e);
+  }
 
-  switch (gameType) {
-    case 'tic-tac-toe': renderTicTacToe(); break;
-    case 'connect-four': renderConnectFour(); break;
-    case 'chess': renderChess(); break;
-    case 'checkers': renderCheckers(); break;
-    case 'othello': renderOthello(); break;
-    case 'rock-paper-scissors': renderRockPaperScissors(); break;
-    case 'battleship': renderBattleship(); break;
-    case 'hangman': renderHangman(); break;
-    case 'memory-match': renderMemoryMatch(); break;
-    case 'dots-and-boxes': renderDotsAndBoxes(); break;
+  try {
+    switch (gameType) {
+      case 'tic-tac-toe': renderTicTacToe(); break;
+      case 'connect-four': renderConnectFour(); break;
+      case 'chess': renderChess(); break;
+      case 'checkers': renderCheckers(); break;
+      case 'othello': renderOthello(); break;
+      case 'rock-paper-scissors': renderRockPaperScissors(); break;
+      case 'battleship': renderBattleship(); break;
+      case 'hangman': renderHangman(); break;
+      case 'memory-match': renderMemoryMatch(); break;
+      case 'dots-and-boxes': renderDotsAndBoxes(); break;
+    }
+  } catch (e) {
+     console.error("Game render error", e);
+     board.innerHTML = `<div class='error-card'><h3>Game Error</h3><p>${e.message}</p><p>The room state might be stale. Try Leaving and re-joining.</p></div>`;
   }
 }
 
@@ -1048,22 +1057,22 @@ function renderDotsAndBoxes() {
   // Render Boxes
   for (let r = 0; r < size - 1; r++) {
     for (let c = 0; c < size - 1; c++) {
-      const box = document.createElement('div');
-      box.style.position = 'absolute';
-      box.style.left = `${c * cellSize + dotSize / 2}px`;
-      box.style.top = `${r * cellSize + dotSize / 2}px`;
-      box.style.width = `${cellSize}px`;
-      box.style.height = `${cellSize}px`;
-      const owner = gameState.boxes[r][c];
+      const idx = r * (size - 1) + c;
+      const owner = gameState.boxes[idx];
       if (owner) {
-        box.style.background = owner === 'P1' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(16, 185, 129, 0.2)';
-        box.textContent = owner;
+        const box = document.createElement('div');
+        box.style.position = 'absolute';
+        box.style.top = `${r * cellSize + dotSize / 2}px`;
+        box.style.left = `${c * cellSize + dotSize / 2}px`;
+        box.style.width = `${cellSize}px`;
+        box.style.height = `${cellSize}px`;
+        box.style.background = owner === 'P1' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(244, 63, 94, 0.2)';
         box.style.display = 'grid';
         box.style.placeItems = 'center';
-        box.style.fontWeight = 'bold';
-        box.style.fontSize = `${cellSize * 0.3}px`;
+        box.style.fontSize = '1.5rem';
+        box.textContent = owner === 'P1' ? 'P1' : 'P2';
+        container.appendChild(box);
       }
-      container.appendChild(box);
     }
   }
 
@@ -1327,6 +1336,18 @@ function enterApp(roomState, isSilentRejoin = false) {
     symbol: mySymbol,
     availableGames: availableGames
   }));
+
+  // Start heartbeat
+  if (window.heartbeatInterval) clearInterval(window.heartbeatInterval);
+  window.heartbeatInterval = setInterval(() => {
+    if (currentRoomId && myParticipantId) {
+      fetch('/api/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: currentRoomId, participantId: myParticipantId })
+      }).catch(err => console.error("Heartbeat failed", err));
+    }
+  }, 45000);
 
   roomTitle.textContent = currentRoomId;
   meLabel.textContent = `${currentUsername} (${mySymbol})`;

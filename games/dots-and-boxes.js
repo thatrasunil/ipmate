@@ -3,7 +3,7 @@ function createInitialState() {
   return {
     size,
     lines: { h: {}, v: {} }, // 'r-c': symbol
-    boxes: Array(size - 1).fill().map(() => Array(size - 1).fill(null)),
+    boxes: Array((size - 1) * (size - 1)).fill(null), // Flattened 3x3
     turn: 'P1',
     scores: { P1: 0, P2: 0 },
     active: true,
@@ -29,7 +29,8 @@ function applyMove(state, player, move) {
   // Check boxes affected by this line
   const checkAndFillBox = (br, bc) => {
     if (br < 0 || bc < 0 || br >= size - 1 || bc >= size - 1) return false;
-    if (state.boxes[br][bc]) return false;
+    const idx = br * (size - 1) + bc;
+    if (state.boxes[idx]) return false;
 
     // A box is completed if all 4 lines are present
     const top = state.lines.h[`${br}-${bc}`];
@@ -38,7 +39,7 @@ function applyMove(state, player, move) {
     const right = state.lines.v[`${br}-${bc + 1}`];
 
     if (top && bottom && left && right) {
-      state.boxes[br][bc] = state.turn;
+      state.boxes[idx] = state.turn;
       state.scores[state.turn]++;
       return true;
     }

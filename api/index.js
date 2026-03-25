@@ -128,7 +128,48 @@ app.post('/api/join', asyncHandler(async (req, res) => {
     }
 
     const participantsSnap = await participantsRef.get();
-    if (participantsSnap.size >= 2) {
+    let isStale = (participantsSnap.size === 0);
+    
+    if (!isStale) {
+      // Check if all existing participants are "dead" (no heartbeat for 2 mins)
+      const now = Date.now();
+      const activeThreshold = 2 * 60 * 1000;
+      let anyActive = false;
+      
+      participantsSnap.forEach(doc => {
+        const p = doc.data();
+        const lastSeen = p.lastSeen?.toMillis ? p.lastSeen.toMillis() : (p.lastSeen || 0);
+        if (now - lastSeen < activeThreshold) anyActive = true;
+      });
+      
+      if (!anyActive) isStale = true;
+    }
+
+    if (isStale) {
+      console.log(`[CLEANUP] Room ${vRoom.value} is stale. Resetting...`);
+      const batch = db.batch();
+      
+      // Delete old participants
+      participantsSnap.forEach(doc => batch.delete(doc.ref));
+      
+      // Delete messages
+      const msgsSnap = await roomRef.collection('messages').get();
+      msgsSnap.forEach(doc => batch.delete(doc.ref));
+      
+      // Reset game state to default (1D array compatible)
+      const gameType = 'tic-tac-toe';
+      batch.set(roomRef, {
+        roomId: vRoom.value,
+        gameType,
+        gameState: games[gameType].createInitialState(),
+        lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: false });
+      
+      await batch.commit();
+      
+      // Refetch room data after reset
+      roomData = (await roomRef.get()).data();
+    } else if (participantsSnap.size >= 2) {
       return res.status(400).json({ error: 'Room is full.' });
     }
 
@@ -206,6 +247,18 @@ app.post('/api/move', asyncHandler(async (req, res) => {
     console.error('Error in /api/move:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
+}));
+
+app.post('/api/heartbeat', asyncHandler(async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not initialized.' });
+  const { roomId, participantId } = req.body;
+  if (!roomId || !participantId) return res.status(400).json({ error: 'Missing fields.' });
+
+  await db.collection('rooms').doc(roomId)
+    .collection('participants').doc(participantId)
+    .update({ lastSeen: admin.firestore.FieldValue.serverTimestamp() });
+
+  res.json({ success: true });
 }));
 
 app.post('/api/select-game', asyncHandler(async (req, res) => {
