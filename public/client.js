@@ -1411,26 +1411,31 @@ function renderTicTacToe() {
     btn.style.position = 'relative';
     btn.style.overflow = 'hidden';
 
+    const cellEl = document.createElement('div');
+    cellEl.className = 'ttt-cell';
+    
     if (cell === 'X') {
-      btn.style.color = 'var(--accent-primary)';
-      btn.style.textShadow = '0 2px 8px rgba(99, 102, 241, 0.5)';
+      cellEl.textContent = 'X';
+      cellEl.classList.add('neon-x');
     } else if (cell === 'O') {
-      btn.style.color = 'var(--accent-success)';
-      btn.style.textShadow = '0 2px 8px rgba(16, 185, 129, 0.5)';
+      cellEl.textContent = 'O';
+      cellEl.classList.add('neon-o');
     }
 
-    btn.onclick = () => {
-      if (!cell && gameState.turn === mySymbol) {
+    // Highlight winning line
+    if (gameState.winningLine && gameState.winningLine.includes(i)) {
+      cellEl.classList.add('winning-cell');
+      cellEl.style.color = (cell === 'X') ? '#ff2d55' : '#00d1ff';
+    }
+
+    cellEl.onclick = () => {
+      if (moveInFlight) return;
+      if (gameState.active && gameState.turn === mySymbol && !cell) {
         haptic();
         sendMove({ index: i });
       }
     };
 
-    btn.onmouseenter = () => {
-      if (!cell) {
-        btn.style.transform = 'scale(1.05)';
-        btn.style.boxShadow = '0 6px 20px rgba(99, 102, 241, 0.3)';
-      }
     };
 
     btn.onmouseleave = () => {

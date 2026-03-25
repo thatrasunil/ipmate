@@ -26,12 +26,13 @@ function applyMove(state, player, move) {
   const { index } = move;
   state.board[index] = player.symbol;
 
-  const winner = checkWinner(state.board);
-  const isDraw = !winner && state.board.every((cell) => cell !== null);
+  const winInfo = checkWinner(state.board);
+  const isDraw = !winInfo && state.board.every((cell) => cell !== null);
 
-  state.winner = winner;
+  state.winner = winInfo ? winInfo.symbol : null;
+  state.winningLine = winInfo ? winInfo.line : null;
   state.isDraw = isDraw;
-  state.active = !winner && !isDraw;
+  state.active = !winInfo && !isDraw;
   state.turn = state.turn === 'X' ? 'O' : 'X';
 
   return state;
@@ -44,9 +45,10 @@ function checkWinner(board) {
     [0, 4, 8], [2, 4, 6],
   ];
 
-  for (const [a, b, c] of lines) {
+  for (const line of lines) {
+    const [a, b, c] = line;
     if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-      return board[a];
+      return { symbol: board[a], line };
     }
   }
   return null;
