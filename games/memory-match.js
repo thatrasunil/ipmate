@@ -8,7 +8,11 @@ function createInitialState() {
 
 function isValidMove(state, player, move) {
   const card = state.cards[move.index];
-  return state.active && player.symbol === state.turn && card && !card.flipped && !card.matched && state.currentPair.length < 2;
+  const isMyTurn = state.active && player.symbol === state.turn;
+  if (!isMyTurn || !card || card.flipped || card.matched) return false;
+  
+  // Allow if 0 or 1 card flipped, OR if 2 are flipped (will be cleared by applyMove)
+  return state.currentPair.length <= 2;
 }
 
 function applyMove(state, player, move) {
