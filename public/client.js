@@ -664,7 +664,10 @@ function _makeGridCell(size) {
   c.style.display = 'grid';
   c.style.gridTemplateColumns = `repeat(8, ${size}px)`;
   c.style.gap = '2px';
-  return c;function renderChess() {
+  return c;
+}
+
+function renderChess() {
   const mainContainer = document.createElement('div');
   mainContainer.style.display = 'flex';
   mainContainer.style.flexDirection = 'column';
