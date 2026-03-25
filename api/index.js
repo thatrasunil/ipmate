@@ -293,12 +293,16 @@ app.post('/api/select-game', asyncHandler(async (req, res) => {
       }
     });
 
-    batch.update(roomRef, {
+    batch.set(roomRef, {
       gameType,
       gameState: games[gameType].createInitialState(),
       lastUpdate: admin.firestore.FieldValue.serverTimestamp()
-    });
-
+    }, { merge: true });
+    
+    // Clear messages for new game
+    const msgsSnap = await roomRef.collection('messages').get();
+    msgsSnap.forEach(doc => batch.delete(doc.ref));
+    
     await batch.commit();
     res.json({ success: true });
   } catch (err) {

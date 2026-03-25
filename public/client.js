@@ -1046,9 +1046,10 @@ function renderDotsAndBoxes() {
   container.style.position = 'relative';
   
   const size = gameState.size;
-  const boardWidth = board.clientWidth - 40; // Subtract padding
-  const cellSize = Math.min(100, Math.floor(boardWidth / (size - 0.5)));
-  const dotSize = Math.max(8, Math.floor(cellSize * 0.16));
+  const boardActualWidth = board.clientWidth || 320; // Fallback for background load
+  const boardWidth = boardActualWidth - 40; // Subtract padding
+  const cellSize = Math.min(100, Math.floor(boardWidth / (size - 1.2)));
+  const dotSize = Math.max(10, Math.floor(cellSize * 0.2));
   
   container.style.width = `${(size - 1) * cellSize + dotSize}px`;
   container.style.height = `${(size - 1) * cellSize + dotSize}px`;
@@ -1255,6 +1256,7 @@ function renderConnectFour() {
 
 function renderRockPaperScissors() {
   const container = document.createElement('div');
+  container.className = 'rps-container';
   container.style.display = 'flex';
   container.style.flexDirection = 'column';
   container.style.alignItems = 'center';
@@ -1265,59 +1267,66 @@ function renderRockPaperScissors() {
   title.style.color = 'var(--text-primary)';
   title.style.fontSize = '1.2rem';
   title.style.fontWeight = '600';
-  title.style.margin = '0';
   container.appendChild(title);
 
-  const choicesContainer = document.createElement('div');
-  choicesContainer.style.display = 'flex';
-  choicesContainer.style.gap = '20px';
-  choicesContainer.style.flexWrap = 'wrap';
-  choicesContainer.style.justifyContent = 'center';
+  const status = document.createElement('div');
+  status.style.fontSize = '1.1rem';
+  status.style.color = 'var(--text-muted)';
+  status.style.textAlign = 'center';
+  
+  if (!gameState.active) {
+    // Show results
+    const results = document.createElement('div');
+    results.style.textAlign = 'center';
+    const p1Choice = gameState.moves['P1'] || '?';
+    const p2Choice = gameState.moves['P2'] || '?';
+    
+    results.innerHTML = `
+      <div style="display: flex; gap: 40px; margin-bottom: 20px; font-size: 3rem;">
+        <div style="text-align: center"><div style="font-size: 1rem">P1</div>${p1Choice === 'rock' ? '🪨' : p1Choice === 'paper' ? '📄' : '✂️'}</div>
+        <div style="text-align: center"><div style="font-size: 1rem">P2</div>${p2Choice === 'rock' ? '🪨' : p2Choice === 'paper' ? '📄' : '✂️'}</div>
+      </div>
+      <h2 style="color: var(--accent-primary)">${gameState.draw ? "It's a Draw!" : (gameState.winner + " Wins!")}</h2>
+    `;
+    container.appendChild(results);
+  } else {
+    // Check if I already chose
+    if (gameState.moves[mySymbol]) {
+      status.textContent = "Waiting for Mate to choose...";
+      container.appendChild(status);
+    } else {
+      const choicesContainer = document.createElement('div');
+      choicesContainer.style.display = 'flex';
+      choicesContainer.style.gap = '20px';
+      choicesContainer.style.flexWrap = 'wrap';
+      choicesContainer.style.justifyContent = 'center';
 
-  const choices = [
-    { name: 'rock', emoji: '🪨', color: 'var(--accent-primary)' },
-    { name: 'paper', emoji: '📄', color: 'var(--accent-success)' },
-    { name: 'scissors', emoji: '✂️', color: 'var(--accent-warning)' }
-  ];
+      const choices = [
+        { name: 'rock', emoji: '🪨', color: '#6366f1' },
+        { name: 'paper', emoji: '📄', color: '#10b981' },
+        { name: 'scissors', emoji: '✂️', color: '#f59e0b' }
+      ];
 
-  choices.forEach(({ name, emoji, color }) => {
-    const btn = document.createElement('button');
-    btn.className = 'rps-choice';
-    btn.innerHTML = `<span style="font-size: 2rem;">${emoji}</span><br><span style="font-size: 0.9rem; font-weight: 600;">${name.toUpperCase()}</span>`;
-    btn.style.padding = '20px 24px';
-    btn.style.borderRadius = '16px';
-    btn.style.border = '2px solid var(--border-glass)';
-    btn.style.background = 'var(--bg-surface)';
-    btn.style.color = 'var(--text-primary)';
-    btn.style.cursor = 'pointer';
-    btn.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-    btn.style.backdropFilter = 'blur(10px)';
-    btn.style.display = 'flex';
-    btn.style.flexDirection = 'column';
-    btn.style.alignItems = 'center';
-    btn.style.gap = '8px';
-    btn.style.minWidth = '100px';
+      choices.forEach(({ name, emoji, color }) => {
+        const btn = document.createElement('button');
+        btn.innerHTML = `<div style="font-size: 2.5rem">${emoji}</div><div style="font-weight: bold">${name.toUpperCase()}</div>`;
+        btn.style.padding = '20px';
+        btn.style.borderRadius = '16px';
+        btn.style.background = 'rgba(255,255,255,0.05)';
+        btn.style.border = `2px solid rgba(255,255,255,0.1)`;
+        btn.style.color = 'white';
+        btn.style.cursor = 'pointer';
+        
+        btn.onclick = () => {
+          haptic();
+          sendMove({ choice: name });
+        };
+        choicesContainer.appendChild(btn);
+      });
+      container.appendChild(choicesContainer);
+    }
+  }
 
-    btn.onmouseenter = () => {
-      btn.style.transform = 'translateY(-4px) scale(1.05)';
-      btn.style.boxShadow = `0 8px 25px rgba(99, 102, 241, 0.3)`;
-      btn.style.borderColor = color;
-    };
-
-    btn.onmouseleave = () => {
-      btn.style.transform = 'translateY(0) scale(1)';
-      btn.style.boxShadow = 'none';
-      btn.style.borderColor = 'var(--border-glass)';
-    };
-
-    btn.onclick = () => {
-      haptic();
-      sendMove({ choice: name });
-    };
-    choicesContainer.appendChild(btn);
-  });
-
-  container.appendChild(choicesContainer);
   board.appendChild(container);
 }
 
