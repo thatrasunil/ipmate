@@ -664,51 +664,90 @@ function _makeGridCell(size) {
   c.style.display = 'grid';
   c.style.gridTemplateColumns = `repeat(8, ${size}px)`;
   c.style.gap = '2px';
-  return c;
-}
+  return c;function renderChess() {
+  const mainContainer = document.createElement('div');
+  mainContainer.style.display = 'flex';
+  mainContainer.style.flexDirection = 'column';
+  mainContainer.style.alignItems = 'center';
+  mainContainer.style.gap = '20px';
+  mainContainer.style.width = '100%';
 
-function renderChess() {
-  const container = document.createElement('div');
-  container.className = 'chess-container';
-  container.style.display = 'grid';
-  container.style.gridTemplateColumns = 'repeat(8, clamp(40px, 9vmin, 85px))';
-  container.style.gap = '2px';
-  container.style.padding = '12px';
-  container.style.background = '#2c3e50';
-  container.style.borderRadius = '8px';
-  container.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+  const boardWrapper = document.createElement('div');
+  boardWrapper.style.position = 'relative';
+  boardWrapper.style.padding = '25px';
+  boardWrapper.style.background = 'var(--bg-surface)';
+  boardWrapper.style.borderRadius = '16px';
+  boardWrapper.style.boxShadow = '0 20px 40px rgba(0,0,0,0.4)';
+  boardWrapper.style.border = '1px solid var(--border-glass)';
+
+  // Labels (1-8)
+  for (let i = 0; i < 8; i++) {
+    const label = document.createElement('div');
+    label.textContent = 8 - i;
+    label.style.position = 'absolute';
+    label.style.left = '8px';
+    label.style.top = `${25 + i * 45 + 15}px`;
+    label.style.fontSize = '0.8rem';
+    label.style.color = 'var(--text-muted)';
+    boardWrapper.appendChild(label);
+  }
+  // Labels (A-H)
+  for (let i = 0; i < 8; i++) {
+    const label = document.createElement('div');
+    label.textContent = String.fromCharCode(65 + i);
+    label.style.position = 'absolute';
+    label.style.bottom = '5px';
+    label.style.left = `${25 + i * 45 + 20}px`;
+    label.style.fontSize = '0.8rem';
+    label.style.color = 'var(--text-muted)';
+    boardWrapper.appendChild(label);
+  }
+
+  const grid = document.createElement('div');
+  grid.style.display = 'grid';
+  grid.style.gridTemplateColumns = 'repeat(8, 45px)';
+  grid.style.gridTemplateRows = 'repeat(8, 45px)';
+  grid.style.border = '2px solid #34495e';
 
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const cell = gameState.board[y * 8 + x];
       const square = document.createElement('div');
-      square.className = 'chess-square';
-      square.style.width = 'clamp(40px, 9vmin, 85px)';
-      square.style.height = 'clamp(40px, 9vmin, 85px)';
+      square.style.width = '45px';
+      square.style.height = '45px';
       square.style.display = 'grid';
       square.style.placeItems = 'center';
-      square.style.fontSize = 'clamp(1.2rem, 4vmin, 2.5rem)';
+      square.style.fontSize = '1.8rem';
       square.style.cursor = 'pointer';
-      square.style.background = (x + y) % 2 === 0 ? '#ecf0f1' : '#95a5a6';
+      
+      const isBlack = (x + y) % 2 !== 0;
+      square.style.background = isBlack ? '#769656' : '#eeeed2';
 
+      // Last move highlight
+      if (gameState.lastMove) {
+        const { from, to } = gameState.lastMove;
+        if ((from.x === x && from.y === y) || (to.x === x && to.y === y)) {
+           square.style.background = isBlack ? '#b9ca43' : '#f7f769';
+        }
+      }
+
+      // Selected piece highlight
       if (selectedPiece && selectedPiece.x === x && selectedPiece.y === y) {
         square.style.background = '#f1c40f';
       }
 
       if (cell) {
         const pieceIcons = {
-          'WK': '\u265A', 'WQ': '\u265B', 'WR': '\u265C', 'WB': '\u265D', 'WN': '\u265E', 'WP': '\u265F',
-          'BK': '\u265A', 'BQ': '\u265B', 'BR': '\u265C', 'BB': '\u265D', 'BN': '\u265E', 'BP': '\u265F'
+          'WK': '♔', 'WQ': '♕', 'WR': '♖', 'WB': '♗', 'WN': '♘', 'WP': '♙',
+          'BK': '♚', 'BQ': '♛', 'BR': '♜', 'BB': '♝', 'BN': '♞', 'BP': '♟'
         };
         square.textContent = pieceIcons[cell] || cell;
-        square.style.color = cell[0] === 'W' ? '#ffffff' : '#000000';
-        square.style.filter = cell[0] === 'W' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.9))' : 'drop-shadow(0 2px 4px rgba(255,255,255,0.4))';
-        square.style.textShadow = cell[0] === 'W' ? '0 0 6px rgba(255,255,255,0.6), 0 0 2px #000' : '0 0 6px rgba(0,0,0,0.6), 0 0 2px #fff';
+        square.style.color = cell[0] === 'W' ? '#fff' : '#000';
+        square.style.filter = 'drop-shadow(0 2px 2px rgba(0,0,0,0.5))';
       }
 
       square.onclick = () => {
         if (!gameState.active || gameState.turn !== mySymbol) return;
-
         if (selectedPiece) {
           if (selectedPiece.x === x && selectedPiece.y === y) {
             selectedPiece = null;
@@ -723,12 +762,54 @@ function renderChess() {
           renderGame();
         }
       };
-
-      container.appendChild(square);
+      grid.appendChild(square);
     }
   }
 
-  board.appendChild(container);
+  boardWrapper.appendChild(grid);
+  mainContainer.appendChild(boardWrapper);
+
+  // History Panel
+  if (gameState.history && gameState.history.length > 0) {
+    const historyBox = document.createElement('div');
+    historyBox.style.width = '100%';
+    historyBox.style.maxHeight = '150px';
+    historyBox.style.overflowY = 'auto';
+    historyBox.style.background = 'rgba(0,0,0,0.2)';
+    historyBox.style.borderRadius = '12px';
+    historyBox.style.padding = '10px';
+    historyBox.style.fontSize = '0.9rem';
+    
+    const hTitle = document.createElement('div');
+    hTitle.textContent = 'Move History';
+    hTitle.style.fontWeight = 'bold';
+    hTitle.style.marginBottom = '8px';
+    hTitle.style.color = 'var(--accent-primary)';
+    historyBox.appendChild(hTitle);
+
+    const list = document.createElement('div');
+    list.style.display = 'grid';
+    list.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    list.style.gap = '5px';
+
+    gameState.history.forEach((h, i) => {
+      const item = document.createElement('div');
+      item.textContent = `${Math.floor(i/2) + 1}. ${h.move}`;
+      item.style.padding = '4px 8px';
+      item.style.background = 'rgba(255,255,255,0.05)';
+      item.style.borderRadius = '4px';
+      list.appendChild(item);
+    });
+    
+    historyBox.appendChild(list);
+    mainContainer.appendChild(historyBox);
+    // Auto scroll to bottom
+    setTimeout(() => historyBox.scrollTop = historyBox.scrollHeight, 100);
+  }
+
+  board.appendChild(mainContainer);
+}
+;
 }
 
 function renderHangman() {

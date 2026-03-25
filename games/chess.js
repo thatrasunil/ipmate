@@ -10,7 +10,7 @@ function createInitialState() {
   for (let i = 0; i < 8; i++) board[6 * 8 + i] = 'WP';
   setupRow(7, 'W'); // White
 
-  return { board, turn: 'W', winner: null, active: true };
+  return { board, turn: 'W', winner: null, active: true, history: [], lastMove: null };
 }
 
 function isValidMove(state, player, move) {
@@ -89,6 +89,12 @@ function applyMove(state, player, move) {
 
   state.board[to.y * 8 + to.x] = piece;
   state.board[from.y * 8 + from.x] = null;
+  
+  // Record history
+  const moveStr = `${String.fromCharCode(97 + from.x)}${8 - from.y} → ${String.fromCharCode(97 + to.x)}${8 - to.y}`;
+  state.history.push({ move: moveStr, piece, symbol: state.turn });
+  state.lastMove = { from, to };
+
   state.turn = state.turn === 'W' ? 'B' : 'W';
   return state;
 }
