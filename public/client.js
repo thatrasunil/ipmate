@@ -1575,6 +1575,293 @@ function renderDotsAndBoxes() {
   board.appendChild(container);
 }
 
+function render2048() {
+  const layout = document.createElement('div');
+  layout.className = 'game-2048-layout';
+
+  const boardsContainer = document.createElement('div');
+  boardsContainer.className = 'game-2048-boards';
+
+  const renderPlayerBoard = (symbol, name) => {
+    const pData = gameState.players[symbol] || { board: Array(16).fill(null), score: 0 };
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.flexDirection = 'column';
+    wrap.style.gap = '12px';
+
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.innerHTML = `
+      <span style="font-weight:700; color:${symbol === 'P1' ? 'var(--accent-primary)' : 'var(--accent-secondary)'}">${name}</span>
+      <span class="game-2048-score">Score: ${pData.score}</span>
+    `;
+    wrap.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'game-2048-container';
+    
+    pData.board.forEach(val => {
+      const tile = document.createElement('div');
+      tile.className = 'game-2048-tile';
+      if (val) {
+        tile.textContent = val;
+        tile.dataset.value = val;
+      }
+      grid.appendChild(tile);
+    });
+
+    wrap.appendChild(grid);
+    return wrap;
+  };
+
+  boardsContainer.appendChild(renderPlayerBoard('P1', participants.find(p => p.symbol === 'P1')?.username || 'P1'));
+  boardsContainer.appendChild(renderPlayerBoard('P2', participants.find(p => p.symbol === 'P2')?.username || 'P2'));
+  layout.appendChild(boardsContainer);
+
+  const footer = document.createElement('div');
+  footer.style.textAlign = 'center';
+  footer.style.color = 'var(--text-muted)';
+  footer.style.fontSize = '0.9rem';
+  footer.innerHTML = '<i class="fas fa-keyboard"></i> Use Arrow Keys or Swipe to move tiles';
+  layout.appendChild(footer);
+
+  board.appendChild(layout);
+}
+
+function renderReaction() {
+  const container = document.createElement('div');
+  container.className = `reaction-container ${gameState.phase}`;
+  
+  const title = document.createElement('div');
+  title.style.fontSize = '1.5rem';
+  title.style.fontWeight = '700';
+  title.style.marginBottom = '20px';
+
+  if (gameState.phase === 'waiting') {
+    title.textContent = 'Wait for RED...';
+  } else if (gameState.phase === 'prep') {
+    title.textContent = 'Wait for GREEN...';
+  } else if (gameState.phase === 'go') {
+    title.textContent = 'CLICK NOW!';
+  } else {
+    title.textContent = 'Round Finished';
+  }
+  container.appendChild(title);
+
+  if (gameState.phase === 'result' || gameState.phase === 'waiting') {
+    const stats = document.createElement('div');
+    stats.style.display = 'grid';
+    stats.style.gap = '10px';
+    
+    const p1Results = gameState.results['P1'] || [];
+    const p2Results = gameState.results['P2'] || [];
+    
+    const renderRes = (s, res) => {
+      const last = res[res.length-1];
+      let text = 'Ready';
+      if (last === 'foul') text = '🔥 TOO EARLY!';
+      else if (typeof last === 'number') text = `${last}ms`;
+      const pName = participants.find(p => p.symbol === s)?.username || s;
+      return `<div style="color:${s==='P1'?'var(--accent-primary)':'var(--accent-secondary)'}">${pName}: ${text}</div>`;
+    };
+
+    stats.innerHTML = `
+      <div style="font-size:0.9rem; opacity:0.8">Round ${gameState.round} results:</div>
+      ${renderRes('P1', p1Results)}
+      ${renderRes('P2', p2Results)}
+    `;
+    container.appendChild(stats);
+    
+    if (gameState.phase === 'result') {
+        const btn = document.createElement('button');
+        btn.className = 'primary-btn';
+        btn.style.marginTop = '20px';
+        btn.textContent = 'Next Round';
+        btn.onclick = () => sendMove({ action: 'ready' });
+        container.appendChild(btn);
+    }
+  }
+
+  container.onclick = () => {
+    if (gameState.active && (gameState.phase === 'waiting' || gameState.phase === 'prep' || gameState.phase === 'go')) {
+      haptic();
+      sendMove({ action: 'click' });
+    }
+  };
+
+  const boardWrap = document.createElement('div');
+  boardWrap.style.display = 'flex';
+  boardWrap.style.justifyContent = 'center';
+  boardWrap.appendChild(container);
+  board.appendChild(boardWrap);
+}
+
+function renderAimTrainer() {
+  const wrapper = document.createElement('div');
+  wrapper.style.display = 'flex';
+  wrapper.style.flexDirection = 'column';
+  wrapper.style.gap = '20px';
+
+  const stats = document.createElement('div');
+  stats.style.display = 'flex';
+  stats.style.justifyContent = 'space-around';
+  stats.innerHTML = `
+    <div class="game-2048-score">Score: ${gameState.scores[mySymbol] || 0}</div>
+    <div class="game-2048-score">Accuracy: ${gameState.stats[mySymbol]?.accuracy || 100}%</div>
+  `;
+  wrapper.appendChild(stats);
+
+  const container = document.createElement('div');
+  container.className = 'aim-trainer-container';
+  
+  if (!window.aimTargets || window.lastAimSync !== gameState.startTime) {
+    window.aimTargets = [];
+    window.lastAimSync = gameState.startTime;
+  }
+
+  if (gameState.active && window.aimTargets.length === 0) {
+    const target = {
+        id: Math.random(),
+        x: 10 + Math.random() * 80,
+        y: 10 + Math.random() * 80
+    };
+    window.aimTargets.push(target);
+  }
+
+  window.aimTargets.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'aim-target';
+    el.style.left = `${t.x}%`;
+    el.style.top = `${t.y}%`;
+    el.onclick = (e) => {
+        e.stopPropagation();
+        haptic();
+        window.aimTargets = window.aimTargets.filter(item => item.id !== t.id);
+        sendMove({ action: 'hit' });
+        renderGame();
+    };
+    container.appendChild(el);
+  });
+
+  container.onclick = () => {
+    if (gameState.active) {
+      sendMove({ action: 'miss' });
+    }
+  };
+
+  wrapper.appendChild(container);
+  board.appendChild(wrapper);
+}
+
+function renderCoinFlip() {
+  const container = document.createElement('div');
+  container.style.textAlign = 'center';
+
+  const coinContainer = document.createElement('div');
+  coinContainer.className = 'coin-container';
+  
+  const coin = document.createElement('div');
+  coin.className = `coin ${gameState.flipped ? 'flipped' : ''}`;
+  if (gameState.result) {
+    coin.style.setProperty('--final-rotation', gameState.result === 'heads' ? '2880deg' : '3060deg');
+    coin.classList.add('flipping');
+  }
+
+  coin.innerHTML = `
+    <div class="coin-face coin-front">Heads</div>
+    <div class="coin-face coin-back">Tails</div>
+  `;
+  coinContainer.appendChild(coin);
+  container.appendChild(coinContainer);
+
+  if (!gameState.flipped) {
+    const myBet = gameState.bets[mySymbol];
+    if (myBet) {
+      container.innerHTML += `<div style="font-size:1.2rem; margin:20px 0">Your bet: <span style="font-weight:800; color:var(--accent-primary)">${myBet.toUpperCase()}</span></div>`;
+      if (Object.keys(gameState.bets).length >= 1) {
+          const flipBtn = document.createElement('button');
+          flipBtn.className = 'primary-btn';
+          flipBtn.style.maxWidth = '200px';
+          flipBtn.style.margin = '0 auto';
+          flipBtn.textContent = 'Flip Coin!';
+          flipBtn.onclick = () => sendMove({ action: 'flip' });
+          container.appendChild(flipBtn);
+      }
+    } else {
+      const group = document.createElement('div');
+      group.style.display = 'flex';
+      group.style.gap = '20px';
+      group.style.justifyContent = 'center';
+      group.style.marginTop = '20px';
+      
+      ['heads', 'tails'].forEach(choice => {
+        const btn = document.createElement('button');
+        btn.className = 'primary-btn';
+        btn.style.width = '140px';
+        btn.textContent = choice.toUpperCase();
+        btn.onclick = () => sendMove({ action: choice === 'heads' ? 'bet' : 'bet', choice });
+        group.appendChild(btn);
+      });
+      container.appendChild(group);
+    }
+  } else {
+    container.innerHTML += `<div style="font-size:2rem; font-weight:800; margin-top:20px; color:var(--accent-warning)">Result: ${gameState.result.toUpperCase()}</div>`;
+  }
+
+  board.appendChild(container);
+}
+
+// Global Keyboard/Swipe Listener for 2048
+let swipeStartX = 0;
+let swipeStartY = 0;
+
+window.addEventListener('touchstart', (e) => {
+  swipeStartX = e.changedTouches[0].screenX;
+  swipeStartY = e.changedTouches[0].screenY;
+}, { passive: true });
+
+window.addEventListener('touchend', (e) => {
+  if (gameType !== '2048' || !gameState?.active) return;
+  
+  const endX = e.changedTouches[0].screenX;
+  const endY = e.changedTouches[0].screenY;
+  
+  const dx = endX - swipeStartX;
+  const dy = endY - swipeStartY;
+  
+  if (Math.abs(dx) > 40 || Math.abs(dy) > 40) {
+    let direction = null;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      direction = dx > 0 ? 'right' : 'left';
+    } else {
+      direction = dy > 0 ? 'down' : 'up';
+    }
+    
+    if (direction) {
+      haptic();
+      sendMove({ direction });
+    }
+  }
+}, { passive: true });
+
+window.addEventListener('keydown', (e) => {
+  if (gameType !== '2048' || !gameState?.active || gameState.turn !== mySymbol) return;
+  
+  let direction = null;
+  if (e.key === 'ArrowUp') direction = 'up';
+  else if (e.key === 'ArrowDown') direction = 'down';
+  else if (e.key === 'ArrowLeft') direction = 'left';
+  else if (e.key === 'ArrowRight') direction = 'right';
+
+  if (direction) {
+    e.preventDefault();
+    haptic();
+    sendMove({ direction });
+  }
+});
+
 function renderTicTacToe() {
   const container = document.createElement('div');
   container.className = 'ttt-grid-container'; // Wrapper to center it if needed
