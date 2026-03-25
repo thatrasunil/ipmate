@@ -88,14 +88,16 @@ const typingText = document.getElementById('typing-text');
 const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
 const instructionsText = document.getElementById('instructions-text');
 
-let socket = null;
-let currentRoomId = '';
-let currentUsername = '';
+// Selection state
+let selectedPiece = null;
+let currentRoomId = ''; // Keep as string for consistency with initial value
+let currentUsername = ''; // Keep as string for consistency with initial value
 let myParticipantId = null;
 let mySymbol = null;
 let messages = [];
-let participants = [];
+let participants = []; // Keep as array for consistency with initial value
 let gameState = null;
+let currentGameType = null; // New variable
 let gameType = 'tic-tac-toe';
 let availableGames = [];
 let listenersBound = false;
@@ -104,8 +106,19 @@ let typingTimeout = null;
 let activeTypingUsers = new Set();
 let soundEnabled = true;
 
-// Selection state for board games (Chess, Checkers)
-let selectedPiece = null;
+// PeerJS & Call State
+let peer = null;
+let currentCall = null;
+let localStream = null;
+let isVideoCall = false;
+let isMuted = false;
+let isCameraOff = false;
+
+function haptic() {
+  if (window.navigator && window.navigator.vibrate) {
+    window.navigator.vibrate(15);
+  }
+}
 
 // E2EE Helpers
 const ENCRYPTION_SALT = new TextEncoder().encode('ipmate-v1-salt');
@@ -173,12 +186,6 @@ async function decryptMessage(cipherText, password) {
 // Mobile View State
 let activeView = 'game';
 let unreadCount = 0;
-
-function haptic(ms = 15) {
-  if (typeof navigator !== 'undefined' && navigator.vibrate) {
-    navigator.vibrate(ms);
-  }
-}
 
 function switchMobileView(viewName) {
   activeView = viewName;
@@ -410,7 +417,7 @@ function renderParticipants() {
 }
 
 function isNearBottom() {
-  const threshold = 100; // px
+  const threshold = 150; // Increased threshold for better feel
   return messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < threshold;
 }
 
@@ -449,10 +456,13 @@ function renderMessages() {
     messagesContainer.appendChild(div);
   });
 
-  if (scrolledNearBottom) {
+  const lastMsg = messages[messages.length - 1];
+  const lastIsMine = lastMsg && lastMsg.participantId === myParticipantId;
+  
+  if (scrolledNearBottom || lastIsMine) {
     messagesContainer.scrollTo({
       top: messagesContainer.scrollHeight,
-      behavior: 'smooth'
+      behavior: lastIsMine ? 'auto' : 'smooth'
     });
     scrollBottomBtn.classList.add('hidden');
   } else if (messages.length > 0) {
@@ -647,15 +657,16 @@ function renderGame() {
       case 'hangman': renderHangman(); break;
       case 'memory-match': renderMemoryMatch(); break;
       case 'dots-and-boxes': renderDotsAndBoxes(); break;
+      case '2048': render2048(); break;
+      case 'reaction': renderReaction(); break;
+      case 'aim-trainer': renderAimTrainer(); break;
+      case 'coin-flip': renderCoinFlip(); break;
     }
   } catch (e) {
      console.error("Game render error", e);
      board.innerHTML = `<div class='error-card'><h3>Game Error</h3><p>${e.message}</p><p>The room state might be stale. Try Leaving and re-joining.</p></div>`;
   }
 }
-
-// Selection state already declared above
-
 
 function _makeGridCell(size) {
   const c = document.createElement('div');
@@ -819,66 +830,190 @@ function renderHangman() {
   container.style.flexDirection = 'column';
   container.style.alignItems = 'center';
   container.style.gap = '20px';
+  container.style.width = '100%';
+  container.style.maxWidth = '500px';
+  container.style.margin = '0 auto';
 
   if (gameState.phase === 'choosing') {
     if (mySymbol === 'P1') {
+      const title = document.createElement('h3');
+      title.textContent = '🎯 Choose a Word';
+      title.style.color = 'var(--accent-primary)';
+      title.style.fontSize = '1.3rem';
+      container.appendChild(title);
+
+      const desc = document.createElement('p');
+      desc.textContent = 'Pick a word for your mate to guess (2-20 letters)';
+      desc.style.color = 'var(--text-muted)';
+      desc.style.fontSize = '0.9rem';
+      desc.style.textAlign = 'center';
+      container.appendChild(desc);
+
       const input = document.createElement('input');
       input.type = 'text';
-      input.placeholder = 'Enter word...';
-      input.className = 'pill-btn';
+      input.placeholder = 'Enter a word...';
       input.style.textAlign = 'center';
-      input.style.fontSize = '1.2rem';
+      input.style.fontSize = '1.3rem';
+      input.style.letterSpacing = '3px';
+      input.maxLength = 20;
+      
+      const hintInput = document.createElement('input');
+      hintInput.type = 'text';
+      hintInput.placeholder = 'Optional hint...';
+      hintInput.style.textAlign = 'center';
+      hintInput.style.fontSize = '0.95rem';
+      hintInput.maxLength = 50;
       
       const btn = document.createElement('button');
-      btn.textContent = 'Set Word';
+      btn.textContent = '🚀 Set Word';
       btn.className = 'primary-btn pill-btn';
+      btn.style.maxWidth = '200px';
       btn.onclick = () => {
-        if (input.value) {
+        const word = input.value.trim();
+        if (word && word.length >= 2) {
           haptic();
-          sendMove({ word: input.value });
+          sendMove({ word, hint: hintInput.value.trim() });
         }
       };
       container.appendChild(input);
+      container.appendChild(hintInput);
       container.appendChild(btn);
     } else {
-      container.innerHTML = '<h3>Mate is choosing a word...</h3>';
+      const waitDiv = document.createElement('div');
+      waitDiv.style.textAlign = 'center';
+      waitDiv.innerHTML = `
+        <div style="font-size: 3rem; margin-bottom: 16px;">🤔</div>
+        <h3 style="color: var(--text-primary)">Mate is choosing a word...</h3>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 8px;">Get ready to guess!</p>
+      `;
+      container.appendChild(waitDiv);
     }
   } else {
-    // Guessing phase
+    // Guessing phase - show hangman figure
+    const hangmanSvg = document.createElement('div');
+    hangmanSvg.innerHTML = `
+      <svg width="160" height="180" viewBox="0 0 160 180" style="filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));">
+        <!-- Gallows -->
+        <line x1="20" y1="170" x2="140" y2="170" stroke="var(--text-muted)" stroke-width="3"/>
+        <line x1="40" y1="170" x2="40" y2="10" stroke="var(--text-muted)" stroke-width="3"/>
+        <line x1="40" y1="10" x2="100" y2="10" stroke="var(--text-muted)" stroke-width="3"/>
+        <line x1="100" y1="10" x2="100" y2="30" stroke="var(--text-muted)" stroke-width="2"/>
+        <!-- Body parts -->
+        ${gameState.wrong >= 1 ? '<circle cx="100" cy="45" r="15" stroke="var(--accent-danger)" stroke-width="2.5" fill="none" style="animation: fadeIn 0.3s"/>' : ''}
+        ${gameState.wrong >= 2 ? '<line x1="100" y1="60" x2="100" y2="105" stroke="var(--accent-danger)" stroke-width="2.5" style="animation: fadeIn 0.3s"/>' : ''}
+        ${gameState.wrong >= 3 ? '<line x1="100" y1="70" x2="75" y2="90" stroke="var(--accent-danger)" stroke-width="2.5" style="animation: fadeIn 0.3s"/>' : ''}
+        ${gameState.wrong >= 4 ? '<line x1="100" y1="70" x2="125" y2="90" stroke="var(--accent-danger)" stroke-width="2.5" style="animation: fadeIn 0.3s"/>' : ''}
+        ${gameState.wrong >= 5 ? '<line x1="100" y1="105" x2="75" y2="135" stroke="var(--accent-danger)" stroke-width="2.5" style="animation: fadeIn 0.3s"/>' : ''}
+        ${gameState.wrong >= 6 ? '<line x1="100" y1="105" x2="125" y2="135" stroke="var(--accent-danger)" stroke-width="2.5" style="animation: fadeIn 0.3s"/>' : ''}
+      </svg>
+    `;
+    container.appendChild(hangmanSvg);
+
+    // Word display
     const wordDisplay = document.createElement('div');
-    wordDisplay.style.fontSize = '2.5rem';
-    wordDisplay.style.letterSpacing = '10px';
-    wordDisplay.style.fontFamily = 'monospace';
-    wordDisplay.textContent = gameState.word.split('').map(l => gameState.guessed.includes(l) ? l : '_').join('');
+    wordDisplay.style.display = 'flex';
+    wordDisplay.style.gap = '8px';
+    wordDisplay.style.justifyContent = 'center';
+    wordDisplay.style.flexWrap = 'wrap';
+    
+    gameState.word.split('').forEach(l => {
+      const letterBox = document.createElement('div');
+      const isRevealed = l === ' ' || gameState.guessed.includes(l) || !gameState.active;
+      letterBox.textContent = l === ' ' ? ' ' : (isRevealed ? l.toUpperCase() : '');
+      letterBox.style.width = '36px';
+      letterBox.style.height = '42px';
+      letterBox.style.display = 'grid';
+      letterBox.style.placeItems = 'center';
+      letterBox.style.fontSize = '1.4rem';
+      letterBox.style.fontWeight = '700';
+      letterBox.style.fontFamily = 'var(--font-mono)';
+      letterBox.style.borderBottom = l === ' ' ? 'none' : '3px solid var(--accent-primary)';
+      letterBox.style.color = isRevealed ? 'var(--text-primary)' : 'transparent';
+      letterBox.style.transition = 'all 0.3s';
+      if (isRevealed && !gameState.active && !gameState.guessed.includes(l)) {
+        letterBox.style.color = 'var(--accent-danger)';
+      }
+      wordDisplay.appendChild(letterBox);
+    });
     container.appendChild(wordDisplay);
 
+    // Hint display
+    if (gameState.hint) {
+      const hintDiv = document.createElement('div');
+      hintDiv.textContent = `💡 Hint: ${gameState.hint}`;
+      hintDiv.style.color = 'var(--accent-warning)';
+      hintDiv.style.fontSize = '0.9rem';
+      hintDiv.style.fontStyle = 'italic';
+      container.appendChild(hintDiv);
+    }
+
+    // Wrong guess counter
     const wrongLabel = document.createElement('div');
-    wrongLabel.textContent = `Wrong guesses: ${gameState.wrong} / ${gameState.maxWrong}`;
-    wrongLabel.style.color = '#f43f5e';
+    wrongLabel.style.display = 'flex';
+    wrongLabel.style.gap = '8px';
+    wrongLabel.style.alignItems = 'center';
+    wrongLabel.style.fontSize = '0.9rem';
+    for (let i = 0; i < gameState.maxWrong; i++) {
+      const heart = document.createElement('span');
+      heart.textContent = i < (gameState.maxWrong - gameState.wrong) ? '❤️' : '🖤';
+      heart.style.fontSize = '1.2rem';
+      heart.style.transition = 'transform 0.3s';
+      if (i === gameState.maxWrong - gameState.wrong) heart.style.transform = 'scale(1.3)';
+      wrongLabel.appendChild(heart);
+    }
     container.appendChild(wrongLabel);
 
+    // Keyboard
     if (mySymbol === 'P2' && gameState.active) {
-      const letters = 'abcdefghijklmnopqrstuvwxyz'.split('');
       const keyboard = document.createElement('div');
       keyboard.style.display = 'flex';
       keyboard.style.flexWrap = 'wrap';
       keyboard.style.justifyContent = 'center';
-      keyboard.style.gap = '8px';
-      keyboard.style.maxWidth = '400px';
+      keyboard.style.gap = '6px';
+      keyboard.style.maxWidth = '380px';
 
-      letters.forEach(l => {
+      'abcdefghijklmnopqrstuvwxyz'.split('').forEach(l => {
         const btn = document.createElement('button');
         btn.textContent = l.toUpperCase();
-        btn.style.width = '35px';
-        btn.style.height = '35px';
-        btn.disabled = gameState.guessed.includes(l);
+        const isGuessed = gameState.guessed.includes(l);
+        const isCorrect = isGuessed && gameState.word.includes(l);
+        const isWrong = isGuessed && !gameState.word.includes(l);
+        
+        btn.style.width = '38px';
+        btn.style.height = '42px';
+        btn.style.borderRadius = '10px';
+        btn.style.border = '1px solid var(--border-glass)';
+        btn.style.fontSize = '0.9rem';
+        btn.style.fontWeight = '600';
+        btn.style.cursor = isGuessed ? 'not-allowed' : 'pointer';
+        btn.style.transition = 'all 0.2s';
+        btn.style.color = '#fff';
+        
+        if (isCorrect) {
+          btn.style.background = 'rgba(74, 222, 128, 0.3)';
+          btn.style.borderColor = 'var(--accent-success)';
+        } else if (isWrong) {
+          btn.style.background = 'rgba(248, 113, 113, 0.3)';
+          btn.style.borderColor = 'var(--accent-danger)';
+          btn.style.opacity = '0.5';
+        } else {
+          btn.style.background = 'var(--bg-surface)';
+        }
+        
+        btn.disabled = isGuessed;
         btn.onclick = () => {
-        haptic();
-        sendMove({ letter: l });
-      };
+          haptic();
+          sendMove({ letter: l });
+        };
         keyboard.appendChild(btn);
       });
       container.appendChild(keyboard);
+    } else if (mySymbol === 'P1' && gameState.active) {
+      const info = document.createElement('p');
+      info.textContent = '👀 Watching mate guess...';
+      info.style.color = 'var(--text-muted)';
+      info.style.fontStyle = 'italic';
+      container.appendChild(info);
     }
   }
 
@@ -1258,15 +1393,65 @@ async function sendMove(move) {
 }
 
 function renderMemoryMatch() {
+  const wrapper = document.createElement('div');
+  wrapper.style.display = 'flex';
+  wrapper.style.flexDirection = 'column';
+  wrapper.style.alignItems = 'center';
+  wrapper.style.gap = '16px';
+  wrapper.style.width = '100%';
+
+  // Score display
+  const scoreRow = document.createElement('div');
+  scoreRow.style.display = 'flex';
+  scoreRow.style.gap = '24px';
+  scoreRow.style.padding = '10px 20px';
+  scoreRow.style.background = 'rgba(0,0,0,0.3)';
+  scoreRow.style.borderRadius = '16px';
+  scoreRow.style.fontSize = '0.95rem';
+  scoreRow.style.fontWeight = '600';
+
+  const p1Score = gameState.scores?.P1 || 0;
+  const p2Score = gameState.scores?.P2 || 0;
+  const isP1Turn = gameState.turn === 'P1';
+
+  scoreRow.innerHTML = `
+    <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; border-radius:10px; ${isP1Turn ? 'background:rgba(93,216,255,0.15); border:1px solid var(--accent-primary)' : 'border:1px solid transparent'}">
+      <span style="color:var(--accent-primary)">P1</span>
+      <span style="font-size:1.2rem; font-weight:700">${p1Score}</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; border-radius:10px; ${!isP1Turn ? 'background:rgba(155,107,255,0.15); border:1px solid var(--accent-secondary)' : 'border:1px solid transparent'}">
+      <span style="color:var(--accent-secondary)">P2</span>
+      <span style="font-size:1.2rem; font-weight:700">${p2Score}</span>
+    </div>
+  `;
+  wrapper.appendChild(scoreRow);
+
+  // Combo indicator
+  if (gameState.comboCount && gameState.comboCount > 1) {
+    const combo = document.createElement('div');
+    combo.textContent = `🔥 ${gameState.comboCount}x Combo!`;
+    combo.style.color = 'var(--accent-warning)';
+    combo.style.fontSize = '0.9rem';
+    combo.style.fontWeight = '700';
+    combo.style.animation = 'pulse 1s infinite';
+    wrapper.appendChild(combo);
+  }
+
+  // Card grid
   const container = document.createElement('div');
   container.className = 'memory-grid';
   container.style.width = '100%';
   container.style.maxWidth = '500px';
-  container.style.margin = '10px auto';
+  container.style.margin = '0 auto';
 
   gameState.cards.forEach((card, i) => {
     const cardEl = document.createElement('div');
     cardEl.className = `memory-card ${card.flipped || card.matched ? 'flipped' : ''} ${card.matched ? 'matched' : ''}`;
+    
+    if (card.matched) {
+      cardEl.style.boxShadow = '0 0 12px rgba(74, 222, 128, 0.4)';
+      cardEl.style.border = '1px solid var(--accent-success)';
+    }
     
     const back = document.createElement('div');
     back.className = 'memory-card-back';
@@ -1292,7 +1477,8 @@ function renderMemoryMatch() {
     container.appendChild(cardEl);
   });
 
-  board.appendChild(container);
+  wrapper.appendChild(container);
+  board.appendChild(wrapper);
 }
 
 function renderDotsAndBoxes() {
@@ -1387,6 +1573,7 @@ function renderDotsAndBoxes() {
       container.appendChild(dot);
     }
   }
+  board.appendChild(container);
 }
 
 function renderTicTacToe() {
@@ -1626,6 +1813,9 @@ function enterApp(roomState, isSilentRejoin = false) {
   // Initialize Real-time Listeners
   initRealtimeListeners();
   
+  // Initialize PeerJS for calls
+  initPeer();
+  
   renderParticipants();
   renderGameTabs();
   renderGame();
@@ -1634,6 +1824,231 @@ function enterApp(roomState, isSilentRejoin = false) {
     switchMobileView('game');
   }
 }
+
+// ==================== PeerJS Call System ====================
+function initPeer() {
+  if (peer) peer.destroy();
+  
+  peer = new Peer(`mate-${currentRoomId}-${myParticipantId.slice(0, 8)}`);
+  
+  peer.on('open', (id) => {
+    console.log('[PEER] Connected with ID:', id);
+    // Save peer ID to Firestore so the other participant can find us
+    if (db && currentRoomId && myParticipantId) {
+      db.collection('rooms').doc(currentRoomId)
+        .collection('participants').doc(myParticipantId)
+        .update({ peerId: id })
+        .catch(e => console.error('Failed to save peerId:', e));
+    }
+  });
+  
+  peer.on('call', (call) => {
+    console.log('[PEER] Incoming call from:', call.peer);
+    currentCall = call;
+    
+    // Determine if this is a video call from metadata
+    const callType = call.metadata?.type || 'audio';
+    isVideoCall = callType === 'video';
+    
+    // Show incoming call UI
+    showCallUI('incoming');
+    
+    const answerBtn = document.getElementById('answer-btn');
+    answerBtn.classList.remove('hidden');
+    answerBtn.onclick = () => answerCall();
+  });
+  
+  peer.on('error', (err) => {
+    console.error('[PEER] Error:', err);
+    if (err.type === 'peer-unavailable') {
+      showToast('Mate is not available for calls right now');
+      hideCallUI();
+    }
+  });
+}
+
+function getOpponentPeerId() {
+  const opponent = participants.find(p => p.participantId !== myParticipantId);
+  return opponent?.peerId || null;
+}
+
+function startCall(withVideo) {
+  const opponentPeerId = getOpponentPeerId();
+  if (!opponentPeerId) {
+    showToast('Mate is not connected yet');
+    return;
+  }
+  if (!peer || peer.disconnected) {
+    showToast('Connection error. Please rejoin the room.');
+    return;
+  }
+  
+  isVideoCall = withVideo;
+  showCallUI('outgoing');
+  
+  const constraints = { audio: true, video: withVideo };
+  
+  navigator.mediaDevices.getUserMedia(constraints)
+    .then(stream => {
+      localStream = stream;
+      
+      // Show local video if video call
+      if (withVideo) {
+        const localVideo = document.getElementById('local-video');
+        localVideo.srcObject = stream;
+        document.getElementById('video-grid').classList.remove('hidden');
+        document.getElementById('toggle-video-btn').classList.remove('hidden');
+      }
+      
+      const call = peer.call(opponentPeerId, stream, {
+        metadata: { type: withVideo ? 'video' : 'audio', username: currentUsername }
+      });
+      
+      currentCall = call;
+      setupCallListeners(call);
+    })
+    .catch(err => {
+      console.error('[CALL] Failed to get media:', err);
+      showToast('Could not access microphone/camera');
+      hideCallUI();
+    });
+}
+
+function answerCall() {
+  if (!currentCall) return;
+  
+  const constraints = { audio: true, video: isVideoCall };
+  
+  navigator.mediaDevices.getUserMedia(constraints)
+    .then(stream => {
+      localStream = stream;
+      
+      if (isVideoCall) {
+        const localVideo = document.getElementById('local-video');
+        localVideo.srcObject = stream;
+        document.getElementById('video-grid').classList.remove('hidden');
+        document.getElementById('toggle-video-btn').classList.remove('hidden');
+      }
+      
+      currentCall.answer(stream);
+      setupCallListeners(currentCall);
+      
+      document.getElementById('answer-btn').classList.add('hidden');
+      document.getElementById('call-status').textContent = 'Connected';
+    })
+    .catch(err => {
+      console.error('[CALL] Failed to get media:', err);
+      showToast('Could not access microphone/camera');
+      hideCallUI();
+    });
+}
+
+function setupCallListeners(call) {
+  call.on('stream', (remoteStream) => {
+    console.log('[CALL] Received remote stream');
+    const remoteVideo = document.getElementById('remote-video');
+    remoteVideo.srcObject = remoteStream;
+    
+    if (isVideoCall) {
+      document.getElementById('video-grid').classList.remove('hidden');
+    }
+    
+    document.getElementById('call-status').textContent = 'Connected';
+  });
+  
+  call.on('close', () => {
+    console.log('[CALL] Call ended');
+    showToast('Call ended');
+    hideCallUI();
+    cleanupCall();
+  });
+  
+  call.on('error', (err) => {
+    console.error('[CALL] Call error:', err);
+    showToast('Call error occurred');
+    hideCallUI();
+    cleanupCall();
+  });
+}
+
+function hangupCall() {
+  if (currentCall) {
+    currentCall.close();
+  }
+  cleanupCall();
+  hideCallUI();
+}
+
+function cleanupCall() {
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
+  }
+  currentCall = null;
+  isMuted = false;
+  isCameraOff = false;
+  
+  const remoteVideo = document.getElementById('remote-video');
+  const localVideo = document.getElementById('local-video');
+  if (remoteVideo) remoteVideo.srcObject = null;
+  if (localVideo) localVideo.srcObject = null;
+}
+
+function toggleMute() {
+  if (!localStream) return;
+  isMuted = !isMuted;
+  localStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
+  const btn = document.getElementById('toggle-audio-btn');
+  btn.classList.toggle('muted', isMuted);
+  btn.innerHTML = `<i class="fas fa-microphone${isMuted ? '-slash' : ''}"></i>`;
+}
+
+function toggleCamera() {
+  if (!localStream) return;
+  isCameraOff = !isCameraOff;
+  localStream.getVideoTracks().forEach(track => track.enabled = !isCameraOff);
+  const btn = document.getElementById('toggle-video-btn');
+  btn.classList.toggle('muted', isCameraOff);
+  btn.innerHTML = `<i class="fas fa-video${isCameraOff ? '-slash' : ''}"></i>`;
+}
+
+function showCallUI(type) {
+  const overlay = document.getElementById('call-overlay');
+  const statusEl = document.getElementById('call-status');
+  const usernameEl = document.getElementById('call-username');
+  const avatarEl = document.getElementById('call-avatar');
+  
+  const opponent = participants.find(p => p.participantId !== myParticipantId);
+  const opName = opponent?.username || 'Mate';
+  
+  avatarEl.textContent = opName.charAt(0).toUpperCase();
+  usernameEl.textContent = opName;
+  
+  if (type === 'incoming') {
+    statusEl.textContent = isVideoCall ? '📹 Incoming Video Call...' : '📞 Incoming Call...';
+    document.getElementById('answer-btn').classList.remove('hidden');
+  } else {
+    statusEl.textContent = isVideoCall ? '📹 Calling...' : '📞 Calling...';
+    document.getElementById('answer-btn').classList.add('hidden');
+  }
+  
+  overlay.classList.remove('hidden');
+}
+
+function hideCallUI() {
+  const overlay = document.getElementById('call-overlay');
+  overlay.classList.add('hidden');
+  document.getElementById('video-grid').classList.add('hidden');
+  document.getElementById('toggle-video-btn').classList.add('hidden');
+  document.getElementById('answer-btn').classList.add('hidden');
+}
+
+// Call button event listeners
+document.getElementById('voice-call-btn')?.addEventListener('click', () => startCall(false));
+document.getElementById('video-call-btn')?.addEventListener('click', () => startCall(true));
+document.getElementById('hangup-btn')?.addEventListener('click', () => hangupCall());
+document.getElementById('toggle-audio-btn')?.addEventListener('click', () => toggleMute());
+document.getElementById('toggle-video-btn')?.addEventListener('click', () => toggleCamera());
 
 joinButton.onclick = () => {
   const username = usernameInput.value.trim();

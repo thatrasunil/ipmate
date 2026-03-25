@@ -60,7 +60,11 @@ const games = {
   'battleship': require('../games/battleship'),
   'hangman': require('../games/hangman'),
   'memory-match': require('../games/memory-match'),
-  'dots-and-boxes': require('../games/dots-and-boxes')
+  'dots-and-boxes': require('../games/dots-and-boxes'),
+  '2048': require('../games/2048'),
+  'reaction': require('../games/reaction'),
+  'aim-trainer': require('../games/aim-trainer'),
+  'coin-flip': require('../games/coin-flip')
 };
 
 const MAX_NAME_LENGTH = 24;
@@ -184,7 +188,11 @@ app.post('/api/join', asyncHandler(async (req, res) => {
       'battleship': ['P1', 'P2'],
       'hangman': ['P1', 'P2'],
       'memory-match': ['P1', 'P2'],
-      'dots-and-boxes': ['P1', 'P2']
+      'dots-and-boxes': ['P1', 'P2'],
+      '2048': ['P1', 'P2'],
+      'reaction': ['P1', 'P2'],
+      'aim-trainer': ['P1', 'P2'],
+      'coin-flip': ['P1', 'P2']
     };
     const symbols = symbolMap[roomData.gameType] || ['P1', 'P2'];
     const symbol = participantsSnap.size === 0 ? symbols[0] : symbols[1];
@@ -283,7 +291,11 @@ app.post('/api/select-game', asyncHandler(async (req, res) => {
       'battleship': ['P1', 'P2'],
       'hangman': ['P1', 'P2'],
       'memory-match': ['P1', 'P2'],
-      'dots-and-boxes': ['P1', 'P2']
+      'dots-and-boxes': ['P1', 'P2'],
+      '2048': ['P1', 'P2'],
+      'reaction': ['P1', 'P2'],
+      'aim-trainer': ['P1', 'P2'],
+      'coin-flip': ['P1', 'P2']
     };
     const symbols = symbolMap[gameType] || ['P1', 'P2'];
     

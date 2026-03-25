@@ -126,6 +126,8 @@
               <span id="chat-count" class="status-banner"><i class="fas fa-message"></i> 0 messages</span>
             </div>
             <div class="chat-actions">
+              <button id="voice-call-btn" class="icon-btn" title="Voice Call"><i class="fas fa-phone"></i></button>
+              <button id="video-call-btn" class="icon-btn" title="Video Call"><i class="fas fa-video"></i></button>
               <button id="emoji-toggle" class="icon-btn" title="Add reaction"><i class="fas fa-face-smile"></i></button>
             </div>
           </div>
@@ -136,6 +138,27 @@
           </div>
           
           <div id="messages" class="messages"></div>
+
+          <!-- Call Overlay -->
+          <div id="call-overlay" class="call-overlay hidden">
+            <div class="call-card">
+              <div class="call-info">
+                <div class="call-avatar" id="call-avatar">?</div>
+                <h4 id="call-status">Calling...</h4>
+                <p id="call-username">Mate</p>
+              </div>
+              <div class="video-grid hidden" id="video-grid">
+                <video id="remote-video" autoplay playsinline></video>
+                <video id="local-video" autoplay playsinline muted></video>
+              </div>
+              <div class="call-actions">
+                <button id="answer-btn" class="call-btn answer hidden"><i class="fas fa-phone"></i></button>
+                <button id="hangup-btn" class="call-btn hangup"><i class="fas fa-phone-slash"></i></button>
+                <button id="toggle-video-btn" class="call-btn toggle-video hidden"><i class="fas fa-video"></i></button>
+                <button id="toggle-audio-btn" class="call-btn toggle-audio"><i class="fas fa-microphone"></i></button>
+              </div>
+            </div>
+          </div>
 
           <button id="scroll-bottom-btn" class="ghost-btn hidden" style="position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 10; padding: 8px 16px; border-radius: 99px; background: var(--bg-card); border-color: var(--accent-primary); color: var(--accent-primary); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
             <i class="fas fa-arrow-down"></i> New Messages
@@ -176,6 +199,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script src="client.js"></script>
 </body>
 </html>
