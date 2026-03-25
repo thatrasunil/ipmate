@@ -812,8 +812,6 @@ function renderChess() {
 
   board.appendChild(mainContainer);
 }
-;
-}
 
 function renderHangman() {
   const container = document.createElement('div');
