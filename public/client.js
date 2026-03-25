@@ -1387,30 +1387,19 @@ function renderDotsAndBoxes() {
       container.appendChild(dot);
     }
   }
-
-  board.appendChild(container);
 }
 
 function renderTicTacToe() {
   const container = document.createElement('div');
-  container.style.display = 'flex';
-  container.style.flexDirection = 'column';
-  container.style.alignItems = 'center';
-  container.style.gap = '16px';
+  container.className = 'ttt-grid-container'; // Wrapper to center it if needed
+  container.style.width = '100%';
+  container.style.maxWidth = '450px';
+  container.style.margin = '20px auto';
 
   const grid = document.createElement('div');
   grid.className = 'ttt-grid';
 
   gameState.board.forEach((cell, i) => {
-    const btn = document.createElement('button');
-    btn.className = `cell ${cell ? 'disabled' : ''}`;
-    btn.textContent = cell || '';
-    btn.style.fontSize = 'clamp(2rem, 5vmin, 3.5rem)';
-    btn.style.fontWeight = 'bold';
-    btn.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-    btn.style.position = 'relative';
-    btn.style.overflow = 'hidden';
-
     const cellEl = document.createElement('div');
     cellEl.className = 'ttt-cell';
     
@@ -1436,16 +1425,21 @@ function renderTicTacToe() {
       }
     };
 
-    };
-
-    btn.onmouseleave = () => {
+    cellEl.onmouseenter = () => {
       if (!cell) {
-        btn.style.transform = 'scale(1)';
-        btn.style.boxShadow = 'none';
+        cellEl.style.transform = 'scale(1.05)';
+        cellEl.style.boxShadow = '0 0 15px rgba(99, 102, 241, 0.6)';
       }
     };
 
-    grid.appendChild(btn);
+    cellEl.onmouseleave = () => {
+      if (!cell) {
+        cellEl.style.transform = 'scale(1)';
+        cellEl.style.boxShadow = 'none';
+      }
+    };
+
+    grid.appendChild(cellEl);
   });
 
   container.appendChild(grid);
