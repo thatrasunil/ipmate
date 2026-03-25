@@ -1037,19 +1037,57 @@ function renderCheckers() {
   container.style.background = '#333';
   container.style.borderRadius = '8px';
 
+  // Client-side validation for hints
+  const isValidCheckersMove = (from, to) => {
+    if (to.x < 0 || to.x >= 8 || to.y < 0 || to.y >= 8) return false;
+    const piece = gameState.board[from.y * 8 + from.x];
+    if (!piece) return false;
+    if (gameState.board[to.y * 8 + to.x] !== null) return false;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+    if (adx !== ady) return false;
+    const isKing = piece === piece.toUpperCase();
+    const direction = piece.toLowerCase() === 'r' ? -1 : 1;
+    if (adx === 1) return isKing || dy === direction;
+    if (adx === 2) {
+      if (!isKing && dy !== direction * 2) return false;
+      const midPiece = gameState.board[(from.y + dy/2) * 8 + (from.x + dx/2)];
+      return midPiece && midPiece.toLowerCase() !== piece.toLowerCase();
+    }
+    return false;
+  };
+
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
-      const cell = gameState.board[y * 8 + x];
+      const idx = y * 8 + x;
+      const cell = gameState.board[idx];
       const square = document.createElement('div');
       square.style.width = 'clamp(40px, 9vmin, 85px)';
       square.style.height = 'clamp(40px, 9vmin, 85px)';
-      square.style.background = (x + y) % 2 === 1 ? '#555' : '#888';
+      const isDark = (x + y) % 2 === 1;
+      square.style.background = isDark ? '#444' : '#ccc';
       square.style.display = 'grid';
       square.style.placeItems = 'center';
       square.style.cursor = 'pointer';
+      square.style.position = 'relative';
+
+      // Move Hint
+      if (selectedPiece && isDark && gameState.board[idx] === null) {
+        if (isValidCheckersMove(selectedPiece, { x, y })) {
+          const hint = document.createElement('div');
+          hint.style.width = '20%';
+          hint.style.height = '20%';
+          hint.style.borderRadius = '50%';
+          hint.style.background = 'rgba(255,255,255,0.3)';
+          square.appendChild(hint);
+        }
+      }
 
       if (selectedPiece && selectedPiece.x === x && selectedPiece.y === y) {
-        square.style.boxShadow = 'inset 0 0 10px #f1c40f';
+        square.style.boxShadow = 'inset 0 0 15px #f1c40f';
+        square.style.background = '#666';
       }
 
       if (cell) {
@@ -1057,11 +1095,11 @@ function renderCheckers() {
         piece.style.width = '80%';
         piece.style.height = '80%';
         piece.style.borderRadius = '50%';
-        piece.style.background = cell.toLowerCase() === 'r' ? '#e74c3c' : '#222';
-        piece.style.boxShadow = '0 4px 10px rgba(0,0,0,0.5)';
+        piece.style.background = cell.toLowerCase() === 'r' ? 'linear-gradient(135deg, #ff416c, #ff4b2b)' : 'linear-gradient(135deg, #434343, #000000)';
+        piece.style.boxShadow = '0 6px 12px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.2)';
         piece.style.display = 'grid';
         piece.style.placeItems = 'center';
-        piece.style.border = '2px solid rgba(255,255,255,0.2)';
+        piece.style.border = '1px solid rgba(255,255,255,0.1)';
         
         if (cell === cell.toUpperCase()) {
           const crown = document.createElement('i');
@@ -1074,15 +1112,18 @@ function renderCheckers() {
       }
 
       square.onclick = () => {
+        if (moveInFlight) return;
         if (!gameState.active || gameState.turn !== mySymbol) return;
 
         if (selectedPiece) {
           if (selectedPiece.x === x && selectedPiece.y === y) {
             selectedPiece = null;
-          } else {
+          } else if (isValidCheckersMove(selectedPiece, { x, y })) {
             haptic();
             sendMove({ from: selectedPiece, to: { x, y } });
             selectedPiece = null;
+          } else if (cell && cell.toLowerCase() === mySymbol) {
+             selectedPiece = { x, y };
           }
           renderGame();
         } else if (cell && cell.toLowerCase() === mySymbol) {
