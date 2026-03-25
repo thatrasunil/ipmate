@@ -241,6 +241,7 @@ app.post('/api/move', asyncHandler(async (req, res) => {
       });
       res.json({ success: true });
     } else {
+      console.warn(`[MOVE_REJECTED] Room:${roomId} Participant:${participantId} Symbols:${participant.symbol}/${roomData.gameState.turn} Move:`, JSON.stringify(move));
       res.status(400).json({ error: 'Invalid move.' });
     }
   } catch (err) {

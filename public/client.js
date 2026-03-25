@@ -13,7 +13,7 @@ async function initFirebase() {
     if (config.apiKey && typeof firebase !== 'undefined') {
       firebase.initializeApp(config);
       db = firebase.firestore();
-      console.log('Firebase initialized');
+      console.log('Firebase initialized - v1.0.8-CheckersFix');
       
       // After Firebase is ready, check for a persisted session
       checkPersistedSession();
