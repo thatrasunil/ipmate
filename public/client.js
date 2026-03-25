@@ -1221,22 +1221,34 @@ function renderMemoryMatch() {
   container.className = 'memory-grid';
   container.style.width = '100%';
   container.style.maxWidth = '500px';
-  container.style.margin = '0 auto';
-  container.style.padding = '12px';
+  container.style.margin = '10px auto';
 
   gameState.cards.forEach((card, i) => {
-    btn.textContent = (card.flipped || card.matched) ? card.val : '?';
+    const cardEl = document.createElement('div');
+    cardEl.className = `memory-card ${card.flipped || card.matched ? 'flipped' : ''} ${card.matched ? 'matched' : ''}`;
+    
+    const back = document.createElement('div');
+    back.className = 'memory-card-back';
+    back.textContent = '?';
+    
+    const front = document.createElement('div');
+    front.className = 'memory-card-front';
+    front.textContent = card.val;
 
-    if (card.matched) btn.style.opacity = '0.5';
+    cardEl.appendChild(back);
+    cardEl.appendChild(front);
 
-    btn.onclick = () => {
-      if (gameState.active && gameState.turn === mySymbol) {
-        haptic();
-        sendMove({ index: i });
-      }
+    cardEl.onclick = () => {
+      if (moveInFlight) return;
+      if (!gameState.active || gameState.turn !== mySymbol) return;
+      if (card.flipped || card.matched) return;
+      
+      haptic();
+      sendMove({ index: i });
+      cardEl.classList.add('flipped');
     };
 
-    container.appendChild(btn);
+    container.appendChild(cardEl);
   });
 
   board.appendChild(container);
