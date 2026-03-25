@@ -890,44 +890,100 @@ function renderBattleship() {
   container.style.display = 'flex';
   container.style.flexDirection = 'column';
   container.style.alignItems = 'center';
-  container.style.gap = '20px';
+  container.style.gap = '24px';
   container.style.width = '100%';
+
+  const phaseLabel = document.createElement('div');
+  phaseLabel.className = 'pill-btn';
+  phaseLabel.style.background = 'var(--accent-primary)';
+  phaseLabel.textContent = gameState.phase === 'placement' ? 'DEPLOYING FLEET' : 'COMBAT PHASE';
+  container.appendChild(phaseLabel);
+
+  if (gameState.phase === 'placement' && !gameState.players[mySymbol]) {
+    const instructions = document.createElement('div');
+    instructions.style.fontSize = '0.9rem';
+    instructions.style.color = 'var(--text-muted)';
+    const count = window.tempPlacement ? window.tempPlacement.filter(x => x).length : 0;
+    instructions.textContent = `Select 5 positions for your fleet (${count}/5)`;
+    container.appendChild(instructions);
+
+    if (count === 5) {
+      const confirmBtn = document.createElement('button');
+      confirmBtn.className = 'pill-btn';
+      confirmBtn.style.marginTop = '10px';
+      confirmBtn.style.background = 'var(--accent-success)';
+      confirmBtn.textContent = 'CONFIRM PLACEMENT';
+      confirmBtn.onclick = () => {
+        haptic();
+        sendMove({ board: window.tempPlacement, ships: [] });
+        window.tempPlacement = null;
+      };
+      container.appendChild(confirmBtn);
+    }
+  }
 
   const gridWrap = document.createElement('div');
   gridWrap.style.display = 'flex';
-  gridWrap.style.gap = '40px';
+  gridWrap.style.gap = '30px';
   gridWrap.style.flexWrap = 'wrap';
   gridWrap.style.justifyContent = 'center';
 
   const renderGrid = (label, isOpponent) => {
     const wrap = document.createElement('div');
     wrap.style.textAlign = 'center';
-    wrap.innerHTML = `<h4 style="margin-bottom: 10px">${label}</h4>`;
+    wrap.innerHTML = `<h4 style="margin-bottom: 12px; color: var(--text-muted); font-size: 0.8rem; letter-spacing: 1px;">${label.toUpperCase()}</h4>`;
     
+    const radarContainer = document.createElement('div');
+    radarContainer.className = 'radar-container';
+    radarContainer.style.padding = '20px'; // Space for labels
+
+    const sweep = document.createElement('div');
+    sweep.className = 'radar-sweep';
+    radarContainer.appendChild(sweep);
+
     const grid = document.createElement('div');
     grid.style.display = 'grid';
-    grid.style.gridTemplateColumns = 'repeat(10, clamp(20px, 3.5vmin, 35px))';
+    grid.style.gridTemplateColumns = 'repeat(10, 28px)';
+    grid.style.gridTemplateRows = 'repeat(10, 28px)';
     grid.style.gap = '1px';
-    grid.style.padding = '4px';
-    grid.style.borderRadius = '4px';
-    grid.style.background = 'rgba(255,255,255,0.1)';
+    grid.style.position = 'relative';
+    grid.style.zIndex = '2';
 
     const playerData = gameState.players[mySymbol];
     const opponentSymbol = mySymbol === 'P1' ? 'P2' : 'P1';
     const opponentData = gameState.players[opponentSymbol];
 
+    // Add coordinate labels
+    for (let i = 0; i < 10; i++) {
+        const xLabel = document.createElement('div');
+        xLabel.className = 'coordinate-label';
+        xLabel.textContent = String.fromCharCode(65 + i);
+        xLabel.style.position = 'absolute';
+        xLabel.style.top = '-18px';
+        xLabel.style.left = `${i * 29 + 10}px`;
+        grid.appendChild(xLabel);
+
+        const yLabel = document.createElement('div');
+        yLabel.className = 'coordinate-label';
+        yLabel.textContent = i + 1;
+        yLabel.style.position = 'absolute';
+        yLabel.style.left = '-18px';
+        yLabel.style.top = `${i * 29 + 8}px`;
+        grid.appendChild(yLabel);
+    }
+
     for (let r = 0; r < 10; r++) {
       for (let c = 0; c < 10; c++) {
         const idx = r * 10 + c;
         const cell = document.createElement('div');
-        cell.style.width = 'clamp(25px, 4.5vmin, 45px)';
-        cell.style.height = 'clamp(25px, 4.5vmin, 45px)';
-        cell.style.background = '#1e293b';
-        cell.style.cursor = (isOpponent && gameState.phase === 'battle') ? 'pointer' : 'default';
+        cell.className = 'radar-cell';
+        cell.style.width = '28px';
+        cell.style.height = '28px';
+        cell.style.background = 'rgba(0, 209, 255, 0.03)';
 
         if (isOpponent) {
           if (opponentData && opponentData.hits[idx]) {
-            cell.style.background = opponentData.hits[idx] === 'hit' ? '#f43f5e' : '#64748b';
+            cell.style.background = opponentData.hits[idx] === 'hit' ? 'rgba(244, 63, 94, 0.6)' : 'rgba(100, 116, 139, 0.4)';
             cell.innerHTML = opponentData.hits[idx] === 'hit' ? '💥' : '💧';
           }
           cell.onclick = () => {
@@ -937,25 +993,22 @@ function renderBattleship() {
             }
           };
         } else {
-          // My board
           if (playerData) {
-            if (playerData.board[idx]) cell.style.background = '#6366f1';
+            if (playerData.board[idx]) cell.style.background = 'rgba(93, 216, 255, 0.4)';
             if (playerData.hits[idx]) {
               cell.innerHTML = playerData.hits[idx] === 'hit' ? '💥' : '💧';
-              if (playerData.hits[idx] === 'hit') cell.style.boxShadow = 'inset 0 0 10px rgba(0,0,0,0.5)';
+              if (playerData.hits[idx] === 'hit') cell.style.background = 'rgba(244, 63, 94, 0.4)';
             }
           } else if (gameState.phase === 'placement') {
-            // Placement mode
             cell.style.cursor = 'pointer';
-            if (window.tempPlacement && window.tempPlacement[idx]) cell.style.background = '#6366f1';
+            if (window.tempPlacement && window.tempPlacement[idx]) cell.style.background = 'rgba(93, 216, 255, 0.6)';
             cell.onclick = () => {
               if (!window.tempPlacement) window.tempPlacement = Array(100).fill(0);
-              window.tempPlacement[idx] = window.tempPlacement[idx] ? 0 : 1;
-              const count = window.tempPlacement.filter(x => x).length;
-              if (count === 5) {
-                haptic();
-                sendMove({ board: window.tempPlacement, ships: [] });
-                window.tempPlacement = null;
+              const currentCount = window.tempPlacement.filter(x => x).length;
+              if (window.tempPlacement[idx]) {
+                window.tempPlacement[idx] = 0;
+              } else if (currentCount < 5) {
+                window.tempPlacement[idx] = 1;
               }
               renderGame();
             };
@@ -964,7 +1017,8 @@ function renderBattleship() {
         grid.appendChild(cell);
       }
     }
-    wrap.appendChild(grid);
+    radarContainer.appendChild(grid);
+    wrap.appendChild(radarContainer);
     return wrap;
   };
 
@@ -1045,14 +1099,47 @@ function renderCheckers() {
 }
 
 function renderOthello() {
+  const mainContainer = document.createElement('div');
+  mainContainer.style.display = 'flex';
+  mainContainer.style.flexDirection = 'column';
+  mainContainer.style.alignItems = 'center';
+  mainContainer.style.gap = '20px';
+  mainContainer.style.width = '100%';
+
+  // Score Board
+  const scoreBoard = document.createElement('div');
+  scoreBoard.style.display = 'flex';
+  scoreBoard.style.gap = '30px';
+  scoreBoard.style.padding = '10px 20px';
+  scoreBoard.style.background = 'rgba(0,0,0,0.3)';
+  scoreBoard.style.borderRadius = '12px';
+  scoreBoard.style.color = 'white';
+  scoreBoard.style.fontSize = '1.1rem';
+  scoreBoard.style.fontWeight = '600';
+
+  const blackScore = (gameState.scores?.black) || 0;
+  const whiteScore = (gameState.scores?.white) || 0;
+
+  scoreBoard.innerHTML = `
+    <div style="display:flex; align-items:center; gap:8px">
+      <div style="width:12px; height:12px; border-radius:50%; background:#222; border:1px solid #555"></div>
+      Black: ${blackScore}
+    </div>
+    <div style="display:flex; align-items:center; gap:8px">
+      <div style="width:12px; height:12px; border-radius:50%; background:#eee; border:1px solid #777"></div>
+      White: ${whiteScore}
+    </div>
+  `;
+  mainContainer.appendChild(scoreBoard);
+
   const container = document.createElement('div');
   container.style.display = 'grid';
-  container.style.gridTemplateColumns = 'repeat(8, clamp(40px, 9vmin, 85px))';
+  container.style.gridTemplateColumns = 'repeat(8, clamp(35px, 8vmin, 60px))';
   container.style.gap = '4px';
   container.style.padding = '12px';
   container.style.background = '#2e7d32';
   container.style.borderRadius = '8px';
-  container.style.boxShadow = 'inset 0 4px 12px rgba(0,0,0,0.3)';
+  container.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5), inset 0 2px 10px rgba(255,255,255,0.1)';
 
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
@@ -1060,20 +1147,37 @@ function renderOthello() {
       const square = document.createElement('div');
       square.style.width = 'clamp(35px, 8vmin, 60px)';
       square.style.height = 'clamp(35px, 8vmin, 60px)';
-      square.style.background = 'rgba(255,255,255,0.1)';
+      square.style.background = 'rgba(255,255,255,0.05)';
       square.style.borderRadius = '4px';
       square.style.display = 'grid';
       square.style.placeItems = 'center';
       square.style.cursor = 'pointer';
+      square.style.transition = 'background 0.2s';
+
+      // Possible Move Hint
+      const isPossible = gameState.possibleMoves?.some(m => m.r === r && m.c === c);
+      const isMyTurn = gameState.active && gameState.turn === mySymbol;
+
+      if (isPossible && isMyTurn) {
+        const hint = document.createElement('div');
+        hint.style.width = '20%';
+        hint.style.height = '20%';
+        hint.style.borderRadius = '50%';
+        hint.style.background = 'rgba(255,255,255,0.3)';
+        square.appendChild(hint);
+        
+        square.onmouseenter = () => square.style.background = 'rgba(255,255,255,0.15)';
+        square.onmouseleave = () => square.style.background = 'rgba(255,255,255,0.05)';
+      }
 
       if (cell) {
         const disc = document.createElement('div');
         disc.style.width = '85%';
         disc.style.height = '85%';
         disc.style.borderRadius = '50%';
-        disc.style.background = cell === 'black' ? '#222' : '#eee';
-        disc.style.boxShadow = '0 6px 12px rgba(0,0,0,0.4)';
-        disc.style.transition = 'all 0.5s ease';
+        disc.style.background = cell === 'black' ? '#1a1a1a' : '#f0f0f0';
+        disc.style.boxShadow = '0 4px 8px rgba(0,0,0,0.4)';
+        disc.style.transition = 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
         square.appendChild(disc);
       }
 
@@ -1086,25 +1190,41 @@ function renderOthello() {
     }
   }
 
-  board.appendChild(container);
+  mainContainer.appendChild(container);
+  board.appendChild(mainContainer);
+}
+
+let moveInFlight = false;
+async function sendMove(move) {
+  if (moveInFlight) return;
+  moveInFlight = true;
+  
+  try {
+    const res = await fetch('/api/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roomId: currentRoomId, participantId: myParticipantId, move })
+    });
+    if (!res.ok) {
+       const err = await res.json();
+       console.error("Move failed", err);
+    }
+  } catch (e) {
+    console.error("Network error on move", e);
+  } finally {
+    moveInFlight = false;
+  }
 }
 
 function renderMemoryMatch() {
   const container = document.createElement('div');
-  container.style.display = 'grid';
-  container.style.gridTemplateColumns = 'repeat(4, clamp(75px, 15vmin, 120px))';
-  container.style.gap = '12px';
+  container.className = 'memory-grid';
+  container.style.width = '100%';
+  container.style.maxWidth = '500px';
+  container.style.margin = '0 auto';
   container.style.padding = '12px';
 
   gameState.cards.forEach((card, i) => {
-    const btn = document.createElement('button');
-    btn.style.width = 'clamp(75px, 15vmin, 120px)';
-    btn.style.height = 'clamp(75px, 15vmin, 120px)';
-    btn.style.background = (card.flipped || card.matched) ? 'white' : 'var(--accent-primary)';
-    btn.style.borderRadius = '12px';
-    btn.style.fontSize = 'clamp(2rem, 6vmin, 3.5rem)';
-    btn.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-    btn.style.cursor = 'pointer';
     btn.textContent = (card.flipped || card.matched) ? card.val : '?';
 
     if (card.matched) btn.style.opacity = '0.5';

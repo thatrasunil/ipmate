@@ -2,7 +2,14 @@ function createInitialState() {
   const board = Array(64).fill(null);
   board[3 * 8 + 3] = 'white'; board[4 * 8 + 4] = 'white';
   board[3 * 8 + 4] = 'black'; board[4 * 8 + 3] = 'black';
-  return { board, turn: 'black', active: true, winner: null };
+  const possibleMoves = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (getFlips(board, r, c, 'black').length > 0) possibleMoves.push({ r, c });
+    }
+  }
+
+  return { board, turn: 'black', active: true, winner: null, scores: { black: 2, white: 2 }, possibleMoves };
 }
 
 const directions = [
@@ -37,8 +44,9 @@ function getFlips(board, r, c, turn) {
 
 function isValidMove(state, player, move) {
   const { r, c } = move;
-  if (!state.active || player.symbol !== state.turn) return false;
-  return getFlips(state.board, r, c, state.turn).length > 0;
+  const turnSymbol = state.turn; // 'black' or 'white'
+  if (!state.active || player.symbol !== turnSymbol) return false;
+  return getFlips(state.board, r, c, turnSymbol).length > 0;
 }
 
 function applyMove(state, player, move) {
@@ -52,46 +60,49 @@ function applyMove(state, player, move) {
 
   const nextTurn = state.turn === 'black' ? 'white' : 'black';
   
-  // Check if next player has any moves
-  let nextHasMoves = false;
-  for (let ir = 0; ir < 8; ir++) {
-    for (let ic = 0; ic < 8; ic++) {
-      if (getFlips(state.board, ir, ic, nextTurn).length > 0) {
-        nextHasMoves = true;
-        break;
-      }
-    }
-    if (nextHasMoves) break;
-  }
-
-  if (nextHasMoves) {
-    state.turn = nextTurn;
-  } else {
-    // Current player might still have moves if next player skipped
-    let currentStillHasMoves = false;
+  // Calculate potential moves for next player
+  const getPossible = (t) => {
+    const list = [];
     for (let ir = 0; ir < 8; ir++) {
       for (let ic = 0; ic < 8; ic++) {
-        if (getFlips(state.board, ir, ic, state.turn).length > 0) {
-          currentStillHasMoves = true;
-          break;
-        }
+        if (getFlips(state.board, ir, ic, t).length > 0) list.push({ r: ir, c: ic });
       }
-      if (currentStillHasMoves) break;
     }
+    return list;
+  };
 
-    if (!currentStillHasMoves) {
+  let nextMoves = getPossible(nextTurn);
+  if (nextMoves.length > 0) {
+    state.turn = nextTurn;
+    state.possibleMoves = nextMoves;
+  } else {
+    // Check if current player still has moves
+    let currentMoves = getPossible(state.turn);
+    if (currentMoves.length > 0) {
+      state.possibleMoves = currentMoves;
+    } else {
       // Game over
       state.active = false;
-      let black = 0, white = 0;
+      state.possibleMoves = [];
+      let blackCount = 0, whiteCount = 0;
       state.board.forEach(cell => {
-        if (cell === 'black') black++;
-        if (cell === 'white') white++;
+        if (cell === 'black') blackCount++;
+        if (cell === 'white') whiteCount++;
       });
-      if (black > white) state.winner = 'Black';
-      else if (white > black) state.winner = 'White';
+      state.scores = { black: blackCount, white: whiteCount };
+      if (blackCount > whiteCount) state.winner = 'black';
+      else if (whiteCount > blackCount) state.winner = 'white';
       else state.winner = 'Draw';
     }
   }
+
+  // Update real-time score
+  let blackCount = 0, whiteCount = 0;
+  state.board.forEach(cell => {
+    if (cell === 'black') blackCount++;
+    if (cell === 'white') whiteCount++;
+  });
+  state.scores = { black: blackCount, white: whiteCount };
 
   return state;
 }

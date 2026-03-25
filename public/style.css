@@ -1598,8 +1598,107 @@ h2 i, h3 i, .status-banner i, .ghost-btn i, .primary-btn i {
 }
 
 @keyframes typing-pulse {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
+  0% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 0.6; transform: scale(1); }
+}
+
+/* Battleship Radar Effects */
+.radar-container {
+  position: relative;
+  background: #0f172a;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 209, 255, 0.3);
+  box-shadow: 0 0 30px rgba(0, 209, 255, 0.1);
+}
+
+.radar-sweep {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(0, 209, 255, 0.1) 20deg, transparent 40deg);
+  transform: translate(-50%, -50%);
+  animation: radar-rotate 4s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes radar-rotate {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.radar-cell {
+  position: relative;
+  z-index: 2;
+  border: 1px solid rgba(0, 209, 255, 0.1);
+  transition: all 0.2s;
+}
+
+.radar-cell:hover {
+  background: rgba(0, 209, 255, 0.1) !important;
+  box-shadow: inset 0 0 10px rgba(0, 209, 255, 0.2);
+}
+
+.coordinate-label {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.7rem;
+  color: rgba(0, 209, 255, 0.6);
+  pointer-events: none;
+}
+
+/* Memory Match 3D Flip */
+.memory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  perspective: 1000px;
+}
+
+.memory-card {
+  width: 100%;
+  aspect-ratio: 1;
+  cursor: pointer;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.memory-card.flipped {
+  transform: rotateY(180deg);
+}
+
+.memory-card-front, .memory-card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  border: 1px solid var(--border-glass);
+}
+
+.memory-card-back {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.memory-card-front {
+  background: white;
+  transform: rotateY(180deg);
+  box-shadow: 0 4px 15px rgba(255,255,255,0.1);
+}
+
+.memory-card.matched .memory-card-front {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: var(--accent-success);
+  opacity: 0.7;
 }
 
 /* Error Text */
